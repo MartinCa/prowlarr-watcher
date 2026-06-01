@@ -6,10 +6,15 @@ Prowlarr Search Watcher — Flask web application
 import hashlib
 import logging
 import os
+import queue
 import sqlite3
 import threading
 import time
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import IntEnum
 from pathlib import Path
 
 import apprise
@@ -131,83 +136,6 @@ def _prowlarr_search_raw(query: str, categories: list[int] | None = None) -> lis
     return results
 
 
-class _ProwlarrLimiter:
-    """Priority queue ensuring one Prowlarr search at a time with a configurable gap."""
-
-    PRIORITY_HIGH = 0  # interactive (preview, seed)
-    PRIORITY_LOW = 1  # scheduled queries
-
-    def __init__(self):
-        self._cond = threading.Condition(threading.Lock())
-        self._last_request: float = 0.0
-        self._seq = 0
-        self._waiters: dict[str, tuple[int, int]] = {}  # label -> (priority, seq)
-        self._running: str | None = None
-
-    def _min_gap(self) -> float:
-        try:
-            return max(0.0, float(get_setting("min_query_interval", "10")))
-        except (ValueError, TypeError):
-            return 10.0
-
-    def search(
-        self,
-        query: str,
-        categories: list[int] | None = None,
-        label: str = "unknown",
-        priority: int = PRIORITY_LOW,
-    ) -> list[dict]:
-        with self._cond:
-            self._seq += 1
-            ticket = (priority, self._seq)
-            self._waiters[label] = ticket
-            try:
-                while self._running is not None or min(self._waiters.values()) != ticket:
-                    self._cond.wait()
-            except BaseException:
-                self._waiters.pop(label, None)
-                self._cond.notify_all()
-                raise
-
-            del self._waiters[label]
-            self._running = label
-
-        try:
-            wait = self._min_gap() - (time.monotonic() - self._last_request)
-            if wait > 0:
-                log.debug("Rate-limiting Prowlarr request, sleeping %.1fs", wait)
-                time.sleep(wait)
-            return _prowlarr_search_raw(query, categories)
-        finally:
-            self._last_request = time.monotonic()
-            with self._cond:
-                self._running = None
-                self._cond.notify_all()
-
-    def status(self) -> dict:
-        with self._cond:
-            return {
-                "queued": {k for k in self._waiters},
-                "running": self._running,
-            }
-
-    def is_busy(self) -> bool:
-        with self._cond:
-            return self._running is not None or bool(self._waiters)
-
-
-_prowlarr_limiter = _ProwlarrLimiter()
-
-
-def prowlarr_search(
-    query: str,
-    categories: list[int] | None = None,
-    label: str = "unknown",
-    priority: int = _ProwlarrLimiter.PRIORITY_LOW,
-) -> list[dict]:
-    return _prowlarr_limiter.search(query, categories, label=label, priority=priority)
-
-
 def hash_result(r: dict) -> str:
     key = r.get("guid") or f"{r.get('title', '')}|{r.get('size', '')}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
@@ -221,6 +149,251 @@ def format_size(size_bytes: int | None) -> str:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024
     return f"{size_bytes:.1f} PB"
+
+
+# ---------------------------------------------------------------------------
+# Work queue — single worker thread for all Prowlarr searches
+# ---------------------------------------------------------------------------
+class Priority(IntEnum):
+    HIGH = 0  # interactive: preview, seed, run-now
+    LOW = 1  # scheduled queries
+
+
+@dataclass
+class Job:
+    job_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    query: str = ""
+    categories: list[int] | None = None
+    label: str = "unknown"
+    priority: Priority = Priority.LOW
+    callback: Callable[["Job"], None] | None = None
+    status: str = "queued"  # queued -> running -> done | error
+    result: list[dict] | None = None
+    error: str | None = None
+    created_at: float = field(default_factory=time.monotonic)
+    _seq: int = 0
+
+    def __lt__(self, other: "Job") -> bool:
+        return (self.priority, self._seq) < (other.priority, other._seq)
+
+
+class WorkQueue:
+    _JOB_TTL = 300.0  # seconds to keep completed jobs
+
+    def __init__(self):
+        self._pq: queue.PriorityQueue[Job] = queue.PriorityQueue()
+        self._lock = threading.Lock()
+        self._jobs: dict[str, Job] = {}
+        self._active_labels: set[str] = set()
+        self._running: Job | None = None
+        self._seq = 0
+        self._thread: threading.Thread | None = None
+
+    def start(self):
+        self._thread = threading.Thread(target=self._worker, daemon=True, name="work-queue")
+        self._thread.start()
+        log.info("Work queue started")
+
+    def _min_gap(self) -> float:
+        try:
+            return max(0.0, float(get_setting("min_query_interval", "10")))
+        except Exception:
+            return 10.0
+
+    def submit(
+        self,
+        query: str,
+        categories: list[int] | None = None,
+        label: str = "unknown",
+        priority: Priority = Priority.LOW,
+        callback: Callable[[Job], None] | None = None,
+    ) -> Job:
+        with self._lock:
+            # Reject duplicate labels (e.g. double-click "Run Now")
+            if label in self._active_labels:
+                for j in self._jobs.values():
+                    if j.label == label and j.status in ("queued", "running"):
+                        return j
+
+            self._seq += 1
+            job = Job(
+                query=query,
+                categories=categories,
+                label=label,
+                priority=priority,
+                callback=callback,
+                _seq=self._seq,
+            )
+            self._jobs[job.job_id] = job
+            self._active_labels.add(label)
+
+        self._pq.put(job)
+        self._cleanup()
+        return job
+
+    def get_job(self, job_id: str) -> Job | None:
+        with self._lock:
+            return self._jobs.get(job_id)
+
+    def status(self) -> dict:
+        with self._lock:
+            queued = {j.label for j in self._jobs.values() if j.status == "queued"}
+            running = self._running.label if self._running else None
+            return {"queued": queued, "running": running}
+
+    def _worker(self):
+        last_request: float = 0.0
+        while True:
+            job = self._pq.get()
+            with self._lock:
+                job.status = "running"
+                self._running = job
+
+            gap = self._min_gap()
+            wait = gap - (time.monotonic() - last_request)
+            if wait > 0:
+                log.debug("Rate-limiting Prowlarr request, sleeping %.1fs", wait)
+                time.sleep(wait)
+
+            try:
+                job.result = _prowlarr_search_raw(job.query, job.categories)
+                job.status = "done"
+            except Exception as exc:
+                job.error = str(exc)
+                job.status = "error"
+                log.error("Search failed for %r: %s", job.label, exc)
+            finally:
+                last_request = time.monotonic()
+                with self._lock:
+                    self._running = None
+                    self._active_labels.discard(job.label)
+
+            if job.callback:
+                try:
+                    job.callback(job)
+                except Exception:
+                    log.exception("Callback failed for job %s (%s)", job.job_id, job.label)
+
+    def _cleanup(self):
+        now = time.monotonic()
+        with self._lock:
+            expired = [
+                jid
+                for jid, j in self._jobs.items()
+                if j.status in ("done", "error") and (now - j.created_at) > self._JOB_TTL
+            ]
+            for jid in expired:
+                del self._jobs[jid]
+
+
+work_queue = WorkQueue()
+
+
+# ---------------------------------------------------------------------------
+# Result processing callbacks
+# ---------------------------------------------------------------------------
+def _process_query_result(qid: int, cron_expr: str, job: Job):
+    now_iso = datetime.now(timezone.utc).isoformat()
+    next_iso = Scheduler.compute_next(cron_expr)
+
+    if job.status == "error":
+        log.error("[Q%d] Search failed: %s", qid, job.error)
+        with _db_lock, get_db() as conn:
+            conn.execute(
+                "UPDATE queries SET last_run=?, next_run=? WHERE id=?",
+                (now_iso, next_iso, qid),
+            )
+            conn.commit()
+        return
+
+    raw = job.result or []
+
+    with get_db() as conn:
+        row = conn.execute("SELECT name, query FROM queries WHERE id=?", (qid,)).fetchone()
+    if not row:
+        return
+
+    with _db_lock, get_db() as conn:
+        seen = {
+            r["result_hash"]
+            for r in conn.execute(
+                "SELECT result_hash FROM results WHERE query_id=?", (qid,)
+            ).fetchall()
+        }
+
+        new_items = []
+        for r in raw:
+            h = hash_result(r)
+            if h not in seen:
+                new_items.append(r)
+                conn.execute(
+                    """INSERT OR IGNORE INTO results
+                       (query_id, result_hash, title, indexer, size, guid,
+                        info_url, download_url, seeders, first_seen, is_new)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,1)""",
+                    (
+                        qid,
+                        h,
+                        r.get("title"),
+                        r.get("indexer"),
+                        r.get("size"),
+                        r.get("guid"),
+                        r.get("infoUrl"),
+                        r.get("downloadUrl"),
+                        r.get("seeders"),
+                        now_iso,
+                    ),
+                )
+
+        conn.execute(
+            "UPDATE queries SET last_run=?, next_run=?, last_count=? WHERE id=?",
+            (now_iso, next_iso, len(raw), qid),
+        )
+        conn.commit()
+
+    log.info("[Q%d] %d total / %d new", qid, len(raw), len(new_items))
+
+    if new_items:
+        _notify(row["name"], row["query"], new_items)
+
+
+def _process_seed_result(qid: int, job: Job):
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if job.status == "error":
+        log.warning("[Q%d] Seed search failed: %s", qid, job.error)
+        return
+
+    raw = job.result or []
+
+    with _db_lock, get_db() as conn:
+        for r in raw:
+            h = hash_result(r)
+            conn.execute(
+                """INSERT OR IGNORE INTO results
+                   (query_id, result_hash, title, indexer, size, guid,
+                    info_url, download_url, seeders, first_seen, is_new)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,0)""",
+                (
+                    qid,
+                    h,
+                    r.get("title"),
+                    r.get("indexer"),
+                    r.get("size"),
+                    r.get("guid"),
+                    r.get("infoUrl"),
+                    r.get("downloadUrl"),
+                    r.get("seeders"),
+                    now_iso,
+                ),
+            )
+        conn.execute(
+            "UPDATE queries SET last_run=?, last_count=? WHERE id=?",
+            (now_iso, len(raw), qid),
+        )
+        conn.commit()
+
+    log.info("[Q%d] Seeded with %d results", qid, len(raw))
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +423,6 @@ class Scheduler:
         while not self._stop.is_set():
             self._wakeup.clear()
             self._tick()
-            # sleep up to 30s, but wake if poked
             self._wakeup.wait(timeout=30)
 
     def _tick(self):
@@ -265,95 +437,42 @@ class Scheduler:
             qid = row["id"]
             cron_expr = row["cron"] or get_setting("default_cron", "0 * * * *")
 
-            # Compute / fix up next_run
             next_run_iso = row["next_run"]
             if not next_run_iso:
-                next_run_iso = self._compute_next(cron_expr)
+                next_run_iso = self.compute_next(cron_expr)
                 with _db_lock, get_db() as conn:
                     conn.execute("UPDATE queries SET next_run=? WHERE id=?", (next_run_iso, qid))
                     conn.commit()
 
             next_run_ts = datetime.fromisoformat(next_run_iso).timestamp()
             if now_ts >= next_run_ts:
-                self._run_query(qid, cron_expr)
+                # Advance next_run immediately to prevent re-enqueue
+                next_iso = self.compute_next(cron_expr)
+                with _db_lock, get_db() as conn:
+                    conn.execute("UPDATE queries SET next_run=? WHERE id=?", (next_iso, qid))
+                    conn.commit()
 
-    def _run_query(self, qid: int, cron_expr: str):
-        with get_db() as conn:
-            row = conn.execute("SELECT * FROM queries WHERE id=?", (qid,)).fetchone()
-        if not row:
-            return
-
-        log.info("[Q%d] Running: %s", qid, row["query"])
-        now_iso = datetime.now(timezone.utc).isoformat()
-        next_iso = self._compute_next(cron_expr)
-
-        try:
-            raw = prowlarr_search(row["query"], label=f"q:{qid}")
-        except Exception as exc:
-            log.error("[Q%d] Search failed: %s", qid, exc)
-            with _db_lock, get_db() as conn:
-                conn.execute(
-                    "UPDATE queries SET last_run=?, next_run=? WHERE id=?",
-                    (now_iso, next_iso, qid),
+                work_queue.submit(
+                    query=row["query"],
+                    label=f"q:{qid}",
+                    priority=Priority.LOW,
+                    callback=lambda job, _qid=qid, _cron=cron_expr: _process_query_result(
+                        _qid, _cron, job
+                    ),
                 )
-                conn.commit()
-            return
-
-        # Diff against stored
-        with _db_lock, get_db() as conn:
-            seen = {
-                r["result_hash"]
-                for r in conn.execute(
-                    "SELECT result_hash FROM results WHERE query_id=?", (qid,)
-                ).fetchall()
-            }
-
-            new_items = []
-            for r in raw:
-                h = hash_result(r)
-                if h not in seen:
-                    new_items.append(r)
-                    conn.execute(
-                        """INSERT OR IGNORE INTO results
-                           (query_id, result_hash, title, indexer, size, guid,
-                            info_url, download_url, seeders, first_seen, is_new)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,1)""",
-                        (
-                            qid,
-                            h,
-                            r.get("title"),
-                            r.get("indexer"),
-                            r.get("size"),
-                            r.get("guid"),
-                            r.get("infoUrl"),
-                            r.get("downloadUrl"),
-                            r.get("seeders"),
-                            now_iso,
-                        ),
-                    )
-
-            conn.execute(
-                "UPDATE queries SET last_run=?, next_run=?, last_count=? WHERE id=?",
-                (now_iso, next_iso, len(raw), qid),
-            )
-            conn.commit()
-
-        log.info("[Q%d] %d total / %d new", qid, len(raw), len(new_items))
-
-        if new_items:
-            _notify(row["name"], row["query"], new_items)
 
     @staticmethod
-    def _compute_next(cron_expr: str) -> str:
+    def compute_next(cron_expr: str) -> str:
         cit = croniter(cron_expr, datetime.now(timezone.utc))
         return cit.get_next(datetime).isoformat()
 
 
 scheduler = Scheduler()
 
-# Initialize DB and start scheduler when the module is loaded (works with
-# both `python app.py` and gunicorn importing the module).
+# Initialize DB and start background threads when the module is loaded
+# (works with both `python app.py` and gunicorn importing the module).
 init_db()
+work_queue.start()
 scheduler.start()
 
 
@@ -444,73 +563,74 @@ def query_detail(qid: int):
 # ---------------------------------------------------------------------------
 @app.route("/api/search-preview", methods=["POST"])
 def search_preview():
-    """Run a live search and return HTML fragment for the add-query modal."""
-    query = request.form.get("query", "").strip()
-    if not query:
+    """Submit a preview search and return a polling fragment."""
+    query_text = request.form.get("query", "").strip()
+    if not query_text:
         return "<p class='preview-empty'>Enter a query above to preview results.</p>"
-    try:
-        raw = prowlarr_search(
-            query, label="preview", priority=_ProwlarrLimiter.PRIORITY_HIGH
-        )
-    except Exception as exc:
-        return f"<p class='preview-error'>Search failed: {exc}</p>"
+    job = work_queue.submit(query_text, label="preview", priority=Priority.HIGH)
+    return (
+        f'<div hx-get="/api/job/{job.job_id}/preview"'
+        f' hx-trigger="load, every 1s"'
+        f' hx-swap="outerHTML">'
+        f'<span style="font-family:var(--mono);font-size:12px;color:var(--muted)">'
+        f"searching Prowlarr…</span></div>"
+    )
 
+
+@app.route("/api/job/<job_id>/preview")
+def job_preview(job_id: str):
+    """Poll endpoint for preview results."""
+    job = work_queue.get_job(job_id)
+    if not job:
+        return "<p class='preview-error'>Job expired or not found.</p>"
+    if job.status in ("queued", "running"):
+        status_text = (
+            "queued — waiting for other searches…"
+            if job.status == "queued"
+            else "searching Prowlarr…"
+        )
+        return (
+            f'<div hx-get="/api/job/{job_id}/preview"'
+            f' hx-trigger="every 1s"'
+            f' hx-swap="outerHTML">'
+            f'<span style="font-family:var(--mono);font-size:12px;color:'
+            f'{"var(--yellow)" if job.status == "queued" else "var(--muted)"}">'
+            f"{status_text}</span></div>"
+        )
+    if job.status == "error":
+        return f"<p class='preview-error'>Search failed: {job.error}</p>"
     return render_template(
-        "_results_fragment.html", results=raw, format_size=format_size, is_preview=True
+        "_results_fragment.html", results=job.result, format_size=format_size, is_preview=True
     )
 
 
 @app.route("/api/query", methods=["POST"])
 def add_query():
     name = request.form.get("name", "").strip()
-    query = request.form.get("query", "").strip()
+    query_text = request.form.get("query", "").strip()
     cron = request.form.get("cron", "").strip() or None
 
-    if not name or not query:
+    if not name or not query_text:
         return "Name and query are required", 400
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    # Seed results silently
-    try:
-        raw = prowlarr_search(
-            query, label="seed", priority=_ProwlarrLimiter.PRIORITY_HIGH
-        )
-    except Exception as exc:
-        log.warning("Initial search failed for new query '%s': %s", query, exc)
-        raw = []
-
     cron_expr = cron or get_setting("default_cron", "0 * * * *")
-    next_iso = scheduler._compute_next(cron_expr)
+    next_iso = Scheduler.compute_next(cron_expr)
 
     with _db_lock, get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO queries (name, query, cron, created_at, last_run, next_run, last_count)"
-            " VALUES (?,?,?,?,?,?,?)",
-            (name, query, cron, now_iso, now_iso, next_iso, len(raw)),
+            "INSERT INTO queries (name, query, cron, created_at, next_run) VALUES (?,?,?,?,?)",
+            (name, query_text, cron, now_iso, next_iso),
         )
         qid = cur.lastrowid
-        for r in raw:
-            h = hash_result(r)
-            conn.execute(
-                """INSERT OR IGNORE INTO results
-                   (query_id, result_hash, title, indexer, size, guid,
-                    info_url, download_url, seeders, first_seen, is_new)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,0)""",
-                (
-                    qid,
-                    h,
-                    r.get("title"),
-                    r.get("indexer"),
-                    r.get("size"),
-                    r.get("guid"),
-                    r.get("infoUrl"),
-                    r.get("downloadUrl"),
-                    r.get("seeders"),
-                    now_iso,
-                ),
-            )
         conn.commit()
 
+    work_queue.submit(
+        query=query_text,
+        label="seed",
+        priority=Priority.HIGH,
+        callback=lambda job, _qid=qid: _process_seed_result(_qid, job),
+    )
     scheduler.poke()
     return redirect(url_for("index"))
 
@@ -536,19 +656,23 @@ def update_query(qid: int):
         return redirect(url_for("index"))
 
     if action == "run_now":
-        # Find and run immediately in background
         with get_db() as conn:
-            row = conn.execute("SELECT cron FROM queries WHERE id=?", (qid,)).fetchone()
+            row = conn.execute("SELECT query, cron FROM queries WHERE id=?", (qid,)).fetchone()
         if row:
             cron_expr = row["cron"] or get_setting("default_cron", "0 * * * *")
-            threading.Thread(
-                target=scheduler._run_query, args=(qid, cron_expr), daemon=True
-            ).start()
+            work_queue.submit(
+                query=row["query"],
+                label=f"q:{qid}",
+                priority=Priority.HIGH,
+                callback=lambda job, _qid=qid, _cron=cron_expr: _process_query_result(
+                    _qid, _cron, job
+                ),
+            )
         return redirect(url_for("query_detail", qid=qid))
 
     if action == "update_cron":
         cron = request.form.get("cron", "").strip() or None
-        next_iso = scheduler._compute_next(cron or get_setting("default_cron", "0 * * * *"))
+        next_iso = Scheduler.compute_next(cron or get_setting("default_cron", "0 * * * *"))
         with _db_lock, get_db() as conn:
             conn.execute(
                 "UPDATE queries SET cron=?, next_run=? WHERE id=?",
@@ -563,8 +687,8 @@ def update_query(qid: int):
 
 @app.route("/api/queue-status")
 def queue_status():
-    """Return the current limiter state for UI polling."""
-    st = _prowlarr_limiter.status()
+    """Return the current work queue state for UI polling."""
+    st = work_queue.status()
     query_states: dict[str, str] = {}
     for label in st["queued"]:
         if label.startswith("q:"):

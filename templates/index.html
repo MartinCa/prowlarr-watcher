@@ -90,8 +90,7 @@
             hx-post="/api/search-preview"
             hx-trigger="click"
             hx-target="#previewBox"
-            hx-include="#queryInput"
-            hx-indicator="#previewSpinner">Preview</button>
+            hx-include="#queryInput">Preview</button>
         </div>
         <div class="hint">
           Tip: results are seeded on first add — you'll only be notified about <em>new</em> results after that.
@@ -99,10 +98,7 @@
       </div>
 
       <div class="form-group">
-        <label>
-          Preview
-          <span id="previewSpinner" class="htmx-indicator" style="color:var(--muted);font-size:11px;margin-left:8px">searching Prowlarr…</span>
-        </label>
+        <label>Preview</label>
         <div class="preview-box" id="previewBox">
           <span class="preview-empty">Type a query above to preview results from Prowlarr.</span>
         </div>
@@ -150,13 +146,12 @@ document.getElementById('cronInput').addEventListener('input', function () {
   document.getElementById('cronInputDesc').textContent = cronDesc(expr);
 });
 
-// Poll queue status and update badges + preview indicator
+// Poll queue status and update query badges
 (function() {
   const badgeHTML = {
     queued:  '<span class="status-badge status-queued"><span class="pulse"></span>QUEUED</span>',
     running: '<span class="status-badge status-running"><span class="pulse"></span>RUNNING</span>',
   };
-  const previewText = { queued: 'queued — waiting…', running: 'searching Prowlarr…' };
   let polling = null;
 
   function update() {
@@ -166,11 +161,7 @@ document.getElementById('cronInput').addEventListener('input', function () {
         const state = data.queries[qid];
         el.innerHTML = state ? badgeHTML[state] : '';
       });
-      const spinner = document.getElementById('previewSpinner');
-      if (spinner && data.preview) {
-        spinner.textContent = previewText[data.preview] || 'searching Prowlarr…';
-      }
-      const active = Object.keys(data.queries).length > 0 || data.preview;
+      const active = Object.keys(data.queries).length > 0;
       clearInterval(polling);
       polling = setInterval(update, active ? 2000 : 10000);
     }).catch(() => {});
