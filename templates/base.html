@@ -244,6 +244,7 @@
     }
     .status-queued { color: var(--yellow); border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
     .status-running { color: var(--blue); border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.08); }
+    .status-error { color: var(--red); border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.08); }
     @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
     .status-badge .pulse { width: 6px; height: 6px; border-radius: 50%; animation: pulse-dot 1.5s ease-in-out infinite; }
     .status-queued .pulse { background: var(--yellow); }
@@ -267,6 +268,7 @@
   var _queueBadgeHTML = {
     queued:  '<span class="status-badge status-queued"><span class="pulse"></span>QUEUED</span>',
     running: '<span class="status-badge status-running"><span class="pulse"></span>RUNNING</span>',
+    error:   '<span class="status-badge status-error">ERROR</span>',
   };
   function pollQueueStatus(filterQid) {
     var polling = null;
@@ -276,7 +278,12 @@
           var qid = el.id.replace('qstatus-', '');
           if (filterQid !== undefined && String(qid) !== String(filterQid)) return;
           var state = data.queries[qid];
-          el.innerHTML = state ? _queueBadgeHTML[state] : '';
+          if (state) {
+            el.innerHTML = _queueBadgeHTML[state];
+            el.removeAttribute('data-error');
+          } else if (!el.hasAttribute('data-error')) {
+            el.innerHTML = '';
+          }
         });
         var active = Object.keys(data.queries).length > 0;
         clearInterval(polling);

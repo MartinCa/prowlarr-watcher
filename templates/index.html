@@ -21,7 +21,9 @@
           <span class="dot {% if q.enabled %}dot-green{% else %}dot-muted{% endif %}"></span>
           {% if q.enabled %}active{% else %}paused{% endif %}
         </span>
-        <span class="tag query-status-badge" id="qstatus-{{ q.id }}"></span>
+        <span class="tag query-status-badge" id="qstatus-{{ q.id }}"
+          {% if q.last_error %}data-error="1"{% endif %}
+        >{% if q.last_error %}<span class="status-badge status-error">ERROR</span>{% endif %}</span>
         <span class="tag">
           <span style="color:var(--muted)">query:</span>&nbsp;
           <span style="color:var(--text);font-family:var(--mono)">{{ q.query }}</span>

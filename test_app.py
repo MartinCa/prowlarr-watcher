@@ -362,6 +362,7 @@ class TestWorkQueue:
 
         wq = self._make_queue()
         wq._min_gap = lambda: 0.0
+        wq._max_retries = lambda: 1  # no retries — fail immediately
 
         job = wq.submit("fail", label="err-test")
 
@@ -375,6 +376,32 @@ class TestWorkQueue:
 
         assert job.status == "error"
         assert "refused" in job.error
+
+    @patch("app._prowlarr_search_raw")
+    def test_worker_retries_on_error(self, mock_search):
+        _configure_prowlarr()
+        mock_search.side_effect = [ConnectionError("refused"), [{"title": "ok"}]]
+
+        wq = self._make_queue()
+        wq._min_gap = lambda: 0.0
+        wq._max_retries = lambda: 3
+
+        callback_results = []
+        wq.submit(
+            "retry-test",
+            label="retry-test",
+            callback=lambda j: callback_results.append(j.status),
+        )
+
+        worker_thread = threading.Thread(target=wq._worker, daemon=True)
+        worker_thread.start()
+
+        for _ in range(100):
+            if callback_results:
+                break
+            time.sleep(0.05)
+
+        assert callback_results == ["done"]
 
     @patch("app._prowlarr_search_raw")
     def test_worker_calls_callback(self, mock_search):
@@ -585,15 +612,18 @@ class TestProcessSeedResult:
         assert q["last_run"] is not None
         assert q["last_count"] == 2
 
-    @patch.object(mod.work_queue, "submit")
-    def test_seed_error_retries(self, mock_submit):
-        mock_submit.return_value = mod.Job()
+    @patch("app._notify_error")
+    def test_seed_error_stores_error_and_notifies(self, mock_notify_err):
         qid = _insert_query()
         job = mod.Job(status="error", error="boom")
         mod._process_seed_result(qid, "test", job)
 
-        mock_submit.assert_called_once()
-        assert mock_submit.call_args.kwargs["label"] == f"seed:{qid}"
+        with mod.get_db() as conn:
+            q = conn.execute("SELECT last_error FROM queries WHERE id=?", (qid,)).fetchone()
+        assert q["last_error"] == "boom"
+
+        mock_notify_err.assert_called_once()
+        assert mock_notify_err.call_args[0][3] == "boom"
 
         with mod.get_db() as conn:
             results = conn.execute("SELECT * FROM results WHERE query_id=?", (qid,)).fetchall()

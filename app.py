@@ -69,7 +69,8 @@ def init_db():
                 created_at  TEXT NOT NULL,
                 last_run    TEXT,
                 next_run    TEXT,
-                last_count  INTEGER DEFAULT 0
+                last_count  INTEGER DEFAULT 0,
+                last_error  TEXT
             );
 
             CREATE TABLE IF NOT EXISTS results (
@@ -96,7 +97,13 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('default_cron', '0 * * * *')")
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('apprise_urls', '')")
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('min_query_interval', '10')")
+        conn.execute("INSERT OR IGNORE INTO settings VALUES ('max_retries', '5')")
         conn.commit()
+        # Migrations for existing databases
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(queries)").fetchall()}
+        if "last_error" not in cols:
+            conn.execute("ALTER TABLE queries ADD COLUMN last_error TEXT")
+            conn.commit()
 
 
 def get_setting(key: str, default: str = "") -> str:
@@ -170,6 +177,7 @@ class Job:
     status: str = "queued"  # queued -> running -> done | error
     result: list[dict] | None = None
     error: str | None = None
+    attempt: int = 1
     created_at: float = field(default_factory=time.monotonic)
     _seq: int = 0
 
@@ -200,6 +208,13 @@ class WorkQueue:
         except Exception:
             return 10.0
 
+    @staticmethod
+    def _max_retries() -> int:
+        try:
+            return max(1, int(get_setting("max_retries", "5")))
+        except Exception:
+            return 5
+
     def submit(
         self,
         query: str,
@@ -207,6 +222,7 @@ class WorkQueue:
         label: str = "unknown",
         priority: Priority = Priority.LOW,
         callback: Callable[[Job], None] | None = None,
+        attempt: int = 1,
     ) -> Job:
         with self._lock:
             # Reject duplicate labels (e.g. double-click "Run Now")
@@ -222,6 +238,7 @@ class WorkQueue:
                 label=label,
                 priority=priority,
                 callback=callback,
+                attempt=attempt,
                 _seq=self._seq,
             )
             self._jobs[job.job_id] = job
@@ -260,13 +277,44 @@ class WorkQueue:
                 job.status = "done"
             except Exception as exc:
                 job.error = str(exc)
-                job.status = "error"
-                log.error("Search failed for %r: %s", job.label, exc)
+                max_ret = self._max_retries()
+                if job.attempt < max_ret:
+                    log.warning(
+                        "Search failed for %r (attempt %d/%d), retrying: %s",
+                        job.label,
+                        job.attempt,
+                        max_ret,
+                        exc,
+                    )
+                    job.status = "retrying"
+                else:
+                    job.status = "error"
+                    log.error(
+                        "Search failed for %r after %d attempts: %s",
+                        job.label,
+                        max_ret,
+                        exc,
+                    )
             finally:
                 last_request = time.monotonic()
                 with self._lock:
                     self._running = None
-                    self._active_labels.discard(job.label)
+                    if job.status != "retrying":
+                        self._active_labels.discard(job.label)
+
+            if job.status == "retrying":
+                self.submit(
+                    query=job.query,
+                    categories=job.categories,
+                    label=job.label,
+                    priority=job.priority,
+                    callback=job.callback,
+                    attempt=job.attempt + 1,
+                )
+                self._pq.task_done()
+                continue
+
+            self._pq.task_done()
 
             if job.callback:
                 try:
@@ -321,20 +369,20 @@ def _process_query_result(qid: int, cron_expr: str, job: Job):
         log.error("[Q%d] Search failed: %s", qid, job.error)
         with _db_lock, get_db() as conn:
             conn.execute(
-                "UPDATE queries SET last_run=? WHERE id=?",
-                (now_iso, qid),
+                "UPDATE queries SET last_run=?, last_error=? WHERE id=?",
+                (now_iso, job.error, qid),
             )
             conn.commit()
+        _notify_error(qid, None, "scheduled", job.error)
         return
 
     raw = job.result or []
 
-    with get_db() as conn:
-        row = conn.execute("SELECT name, query FROM queries WHERE id=?", (qid,)).fetchone()
-    if not row:
-        return
-
     with _db_lock, get_db() as conn:
+        row = conn.execute("SELECT name, query FROM queries WHERE id=?", (qid,)).fetchone()
+        if not row:
+            return
+
         seen = {
             r["result_hash"]
             for r in conn.execute(
@@ -350,7 +398,7 @@ def _process_query_result(qid: int, cron_expr: str, job: Job):
                 _insert_result(conn, qid, r, 1, now_iso)
 
         conn.execute(
-            "UPDATE queries SET last_run=?, last_count=? WHERE id=?",
+            "UPDATE queries SET last_run=?, last_count=?, last_error=NULL WHERE id=?",
             (now_iso, len(raw), qid),
         )
         conn.commit()
@@ -365,13 +413,11 @@ def _process_seed_result(qid: int, query_text: str, job: Job):
     now_iso = datetime.now(timezone.utc).isoformat()
 
     if job.status == "error":
-        log.warning("[Q%d] Seed search failed, will retry: %s", qid, job.error)
-        work_queue.submit(
-            query=query_text,
-            label=f"seed:{qid}",
-            priority=Priority.HIGH,
-            callback=lambda j, _qid=qid, _q=query_text: _process_seed_result(_qid, _q, j),
-        )
+        log.error("[Q%d] Seed search failed after retries: %s", qid, job.error)
+        with _db_lock, get_db() as conn:
+            conn.execute("UPDATE queries SET last_error=? WHERE id=?", (job.error, qid))
+            conn.commit()
+        _notify_error(qid, query_text, "seed", job.error)
         return
 
     raw = job.result or []
@@ -380,7 +426,7 @@ def _process_seed_result(qid: int, query_text: str, job: Job):
         for r in raw:
             _insert_result(conn, qid, r, 0, now_iso)
         conn.execute(
-            "UPDATE queries SET last_run=?, last_count=? WHERE id=?",
+            "UPDATE queries SET last_run=?, last_count=?, last_error=NULL WHERE id=?",
             (now_iso, len(raw), qid),
         )
         conn.commit()
@@ -495,6 +541,30 @@ def _notify(name: str, query: str, new_items: list[dict]):
     log.info("Notification sent: %s", title)
 
 
+def _notify_error(qid: int, query_text: str | None, run_type: str, error: str):
+    raw_urls = get_setting("apprise_urls", "")
+    urls = [u.strip() for u in raw_urls.splitlines() if u.strip()]
+    if not urls:
+        return
+
+    if not query_text:
+        with get_db() as conn:
+            row = conn.execute("SELECT name, query FROM queries WHERE id=?", (qid,)).fetchone()
+        name = row["name"] if row else f"Q{qid}"
+        query_text = row["query"] if row else "?"
+    else:
+        name = query_text
+
+    title = f"[Prowlarr] Search failed — {name}"
+    body = f"Type: {run_type}\nQuery: {query_text}\nError: {error}"
+
+    ap = apprise.Apprise()
+    for u in urls:
+        ap.add(u)
+    ap.notify(title=title, body=body)
+    log.info("Error notification sent for Q%d: %s", qid, error)
+
+
 # ---------------------------------------------------------------------------
 # Routes — pages
 # ---------------------------------------------------------------------------
@@ -516,6 +586,7 @@ def settings():
             "min_query_interval",
             request.form.get("min_query_interval", "10").strip(),
         )
+        set_setting("max_retries", request.form.get("max_retries", "5").strip())
         set_setting("apprise_urls", request.form.get("apprise_urls", "").strip())
         scheduler.poke()
         return redirect(url_for("settings") + "?saved=1")
@@ -526,6 +597,7 @@ def settings():
         prowlarr_api_key=get_setting("prowlarr_api_key"),
         default_cron=get_setting("default_cron"),
         min_query_interval=get_setting("min_query_interval", "10"),
+        max_retries=get_setting("max_retries", "5"),
         apprise_urls=get_setting("apprise_urls"),
         saved=request.args.get("saved"),
     )
@@ -679,21 +751,26 @@ def update_query(qid: int):
     return "Unknown action", 400
 
 
+def _label_to_qid(label: str) -> str | None:
+    for prefix in ("q:", "run:", "seed:"):
+        if label.startswith(prefix):
+            return label[len(prefix) :]
+    return None
+
+
 @app.route("/api/queue-status")
 def queue_status():
     """Return the current work queue state for UI polling."""
     st = work_queue.status()
     query_states: dict[str, str] = {}
     for label in st["queued"]:
-        if label.startswith("q:"):
-            query_states[label[2:]] = "queued"
-        elif label.startswith("run:"):
-            query_states[label[4:]] = "queued"
+        qid = _label_to_qid(label)
+        if qid:
+            query_states[qid] = "queued"
     running = st["running"] or ""
-    if running.startswith("q:"):
-        query_states[running[2:]] = "running"
-    elif running.startswith("run:"):
-        query_states[running[4:]] = "running"
+    qid = _label_to_qid(running)
+    if qid:
+        query_states[qid] = "running"
     preview_state = None
     if any(lab.startswith("preview:") for lab in st["queued"]):
         preview_state = "queued"
