@@ -146,29 +146,6 @@ document.getElementById('cronInput').addEventListener('input', function () {
   document.getElementById('cronInputDesc').textContent = cronDesc(expr);
 });
 
-// Poll queue status and update query badges
-(function() {
-  const badgeHTML = {
-    queued:  '<span class="status-badge status-queued"><span class="pulse"></span>QUEUED</span>',
-    running: '<span class="status-badge status-running"><span class="pulse"></span>RUNNING</span>',
-  };
-  let polling = null;
-
-  function update() {
-    fetch('/api/queue-status').then(r => r.json()).then(data => {
-      document.querySelectorAll('.query-status-badge').forEach(el => {
-        const qid = el.id.replace('qstatus-', '');
-        const state = data.queries[qid];
-        el.innerHTML = state ? badgeHTML[state] : '';
-      });
-      const active = Object.keys(data.queries).length > 0;
-      clearInterval(polling);
-      polling = setInterval(update, active ? 2000 : 10000);
-    }).catch(() => {});
-  }
-
-  update();
-  polling = setInterval(update, 10000);
-})();
+pollQueueStatus();
 </script>
 {% endblock %}

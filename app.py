@@ -106,7 +106,7 @@ def get_setting(key: str, default: str = "") -> str:
 
 
 def set_setting(key: str, value: str):
-    with get_db() as conn:
+    with _db_lock, get_db() as conn:
         conn.execute("INSERT OR REPLACE INTO settings VALUES (?,?)", (key, value))
         conn.commit()
 
@@ -292,16 +292,37 @@ work_queue = WorkQueue()
 # ---------------------------------------------------------------------------
 # Result processing callbacks
 # ---------------------------------------------------------------------------
+def _insert_result(conn, qid: int, r: dict, is_new: int, now_iso: str):
+    conn.execute(
+        """INSERT OR IGNORE INTO results
+           (query_id, result_hash, title, indexer, size, guid,
+            info_url, download_url, seeders, first_seen, is_new)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            qid,
+            hash_result(r),
+            r.get("title"),
+            r.get("indexer"),
+            r.get("size"),
+            r.get("guid"),
+            r.get("infoUrl"),
+            r.get("downloadUrl"),
+            r.get("seeders"),
+            now_iso,
+            is_new,
+        ),
+    )
+
+
 def _process_query_result(qid: int, cron_expr: str, job: Job):
     now_iso = datetime.now(timezone.utc).isoformat()
-    next_iso = Scheduler.compute_next(cron_expr)
 
     if job.status == "error":
         log.error("[Q%d] Search failed: %s", qid, job.error)
         with _db_lock, get_db() as conn:
             conn.execute(
-                "UPDATE queries SET last_run=?, next_run=? WHERE id=?",
-                (now_iso, next_iso, qid),
+                "UPDATE queries SET last_run=? WHERE id=?",
+                (now_iso, qid),
             )
             conn.commit()
         return
@@ -326,28 +347,11 @@ def _process_query_result(qid: int, cron_expr: str, job: Job):
             h = hash_result(r)
             if h not in seen:
                 new_items.append(r)
-                conn.execute(
-                    """INSERT OR IGNORE INTO results
-                       (query_id, result_hash, title, indexer, size, guid,
-                        info_url, download_url, seeders, first_seen, is_new)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,1)""",
-                    (
-                        qid,
-                        h,
-                        r.get("title"),
-                        r.get("indexer"),
-                        r.get("size"),
-                        r.get("guid"),
-                        r.get("infoUrl"),
-                        r.get("downloadUrl"),
-                        r.get("seeders"),
-                        now_iso,
-                    ),
-                )
+                _insert_result(conn, qid, r, 1, now_iso)
 
         conn.execute(
-            "UPDATE queries SET last_run=?, next_run=?, last_count=? WHERE id=?",
-            (now_iso, next_iso, len(raw), qid),
+            "UPDATE queries SET last_run=?, last_count=? WHERE id=?",
+            (now_iso, len(raw), qid),
         )
         conn.commit()
 
@@ -357,36 +361,24 @@ def _process_query_result(qid: int, cron_expr: str, job: Job):
         _notify(row["name"], row["query"], new_items)
 
 
-def _process_seed_result(qid: int, job: Job):
+def _process_seed_result(qid: int, query_text: str, job: Job):
     now_iso = datetime.now(timezone.utc).isoformat()
 
     if job.status == "error":
-        log.warning("[Q%d] Seed search failed: %s", qid, job.error)
+        log.warning("[Q%d] Seed search failed, will retry: %s", qid, job.error)
+        work_queue.submit(
+            query=query_text,
+            label=f"seed:{qid}",
+            priority=Priority.HIGH,
+            callback=lambda j, _qid=qid, _q=query_text: _process_seed_result(_qid, _q, j),
+        )
         return
 
     raw = job.result or []
 
     with _db_lock, get_db() as conn:
         for r in raw:
-            h = hash_result(r)
-            conn.execute(
-                """INSERT OR IGNORE INTO results
-                   (query_id, result_hash, title, indexer, size, guid,
-                    info_url, download_url, seeders, first_seen, is_new)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,0)""",
-                (
-                    qid,
-                    h,
-                    r.get("title"),
-                    r.get("indexer"),
-                    r.get("size"),
-                    r.get("guid"),
-                    r.get("infoUrl"),
-                    r.get("downloadUrl"),
-                    r.get("seeders"),
-                    now_iso,
-                ),
-            )
+            _insert_result(conn, qid, r, 0, now_iso)
         conn.execute(
             "UPDATE queries SET last_run=?, last_count=? WHERE id=?",
             (now_iso, len(raw), qid),
@@ -567,7 +559,9 @@ def search_preview():
     query_text = request.form.get("query", "").strip()
     if not query_text:
         return "<p class='preview-empty'>Enter a query above to preview results.</p>"
-    job = work_queue.submit(query_text, label="preview", priority=Priority.HIGH)
+    job = work_queue.submit(
+        query_text, label=f"preview:{uuid.uuid4().hex[:8]}", priority=Priority.HIGH
+    )
     return (
         f'<div hx-get="/api/job/{job.job_id}/preview"'
         f' hx-trigger="load, every 1s"'
@@ -627,9 +621,9 @@ def add_query():
 
     work_queue.submit(
         query=query_text,
-        label="seed",
+        label=f"seed:{qid}",
         priority=Priority.HIGH,
-        callback=lambda job, _qid=qid: _process_seed_result(_qid, job),
+        callback=lambda job, _qid=qid, _q=query_text: _process_seed_result(_qid, _q, job),
     )
     scheduler.poke()
     return redirect(url_for("index"))
@@ -662,7 +656,7 @@ def update_query(qid: int):
             cron_expr = row["cron"] or get_setting("default_cron", "0 * * * *")
             work_queue.submit(
                 query=row["query"],
-                label=f"q:{qid}",
+                label=f"run:{qid}",
                 priority=Priority.HIGH,
                 callback=lambda job, _qid=qid, _cron=cron_expr: _process_query_result(
                     _qid, _cron, job
@@ -693,12 +687,17 @@ def queue_status():
     for label in st["queued"]:
         if label.startswith("q:"):
             query_states[label[2:]] = "queued"
-    if st["running"] and st["running"].startswith("q:"):
-        query_states[st["running"][2:]] = "running"
+        elif label.startswith("run:"):
+            query_states[label[4:]] = "queued"
+    running = st["running"] or ""
+    if running.startswith("q:"):
+        query_states[running[2:]] = "running"
+    elif running.startswith("run:"):
+        query_states[running[4:]] = "running"
     preview_state = None
-    if "preview" in st["queued"]:
+    if any(lab.startswith("preview:") for lab in st["queued"]):
         preview_state = "queued"
-    elif st["running"] == "preview":
+    elif running.startswith("preview:"):
         preview_state = "running"
     return jsonify({"queries": query_states, "preview": preview_state})
 

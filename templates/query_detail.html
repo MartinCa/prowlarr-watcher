@@ -143,28 +143,6 @@ function updateQueryCronDesc() {
 updateQueryCronDesc();
 queryCronInput.addEventListener('input', updateQueryCronDesc);
 
-// Poll queue status for this query
-(function() {
-  const qid = {{ q.id | tojson }};
-  const badgeHTML = {
-    queued:  '<span class="status-badge status-queued"><span class="pulse"></span>QUEUED</span>',
-    running: '<span class="status-badge status-running"><span class="pulse"></span>RUNNING</span>',
-  };
-  let polling = null;
-
-  function update() {
-    fetch('/api/queue-status').then(r => r.json()).then(data => {
-      const el = document.getElementById('qstatus-' + qid);
-      const state = data.queries[String(qid)];
-      el.innerHTML = state ? badgeHTML[state] : '';
-      const active = !!state;
-      clearInterval(polling);
-      polling = setInterval(update, active ? 2000 : 10000);
-    }).catch(() => {});
-  }
-
-  update();
-  polling = setInterval(update, 10000);
-})();
+pollQueueStatus({{ q.id | tojson }});
 </script>
 {% endblock %}

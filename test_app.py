@@ -566,7 +566,7 @@ class TestProcessSeedResult:
     def test_seed_inserts_as_not_new(self):
         qid = _insert_query()
         job = mod.Job(status="done", result=SAMPLE_RESULTS)
-        mod._process_seed_result(qid, job)
+        mod._process_seed_result(qid, "test", job)
 
         with mod.get_db() as conn:
             results = conn.execute("SELECT * FROM results WHERE query_id=?", (qid,)).fetchall()
@@ -576,7 +576,7 @@ class TestProcessSeedResult:
     def test_seed_updates_last_run_and_count(self):
         qid = _insert_query()
         job = mod.Job(status="done", result=SAMPLE_RESULTS)
-        mod._process_seed_result(qid, job)
+        mod._process_seed_result(qid, "test", job)
 
         with mod.get_db() as conn:
             q = conn.execute(
@@ -585,10 +585,15 @@ class TestProcessSeedResult:
         assert q["last_run"] is not None
         assert q["last_count"] == 2
 
-    def test_seed_error_is_handled(self):
+    @patch.object(mod.work_queue, "submit")
+    def test_seed_error_retries(self, mock_submit):
+        mock_submit.return_value = mod.Job()
         qid = _insert_query()
         job = mod.Job(status="error", error="boom")
-        mod._process_seed_result(qid, job)
+        mod._process_seed_result(qid, "test", job)
+
+        mock_submit.assert_called_once()
+        assert mock_submit.call_args.kwargs["label"] == f"seed:{qid}"
 
         with mod.get_db() as conn:
             results = conn.execute("SELECT * FROM results WHERE query_id=?", (qid,)).fetchall()
@@ -872,7 +877,7 @@ class TestAddQuery:
 
         mock_submit.assert_called_once()
         call_kwargs = mock_submit.call_args.kwargs
-        assert call_kwargs["label"] == "seed"
+        assert call_kwargs["label"].startswith("seed:")
         assert call_kwargs["priority"] == mod.Priority.HIGH
 
     @patch.object(mod.work_queue, "submit")
@@ -928,7 +933,7 @@ class TestUpdateQuery:
         mock_submit.assert_called_once()
         call_kwargs = mock_submit.call_args.kwargs
         assert call_kwargs["priority"] == mod.Priority.HIGH
-        assert call_kwargs["label"] == f"q:{qid}"
+        assert call_kwargs["label"] == f"run:{qid}"
 
     def test_update_cron(self, client):
         qid = _insert_query()
@@ -971,13 +976,13 @@ class TestQueueStatus:
 
     @patch.object(mod.work_queue, "status")
     def test_preview_queued(self, mock_status, client):
-        mock_status.return_value = {"queued": {"preview"}, "running": None}
+        mock_status.return_value = {"queued": {"preview:abc123"}, "running": None}
         data = client.get("/api/queue-status").get_json()
         assert data["preview"] == "queued"
 
     @patch.object(mod.work_queue, "status")
     def test_preview_running(self, mock_status, client):
-        mock_status.return_value = {"queued": set(), "running": "preview"}
+        mock_status.return_value = {"queued": set(), "running": "preview:abc123"}
         data = client.get("/api/queue-status").get_json()
         assert data["preview"] == "running"
 

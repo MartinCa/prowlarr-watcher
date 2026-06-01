@@ -264,6 +264,28 @@
   function cronDesc(expr) {
     try { return cronstrue.toString(expr, { use24HourTimeFormat: true }); } catch(e) { return ''; }
   }
+  var _queueBadgeHTML = {
+    queued:  '<span class="status-badge status-queued"><span class="pulse"></span>QUEUED</span>',
+    running: '<span class="status-badge status-running"><span class="pulse"></span>RUNNING</span>',
+  };
+  function pollQueueStatus(filterQid) {
+    var polling = null;
+    function update() {
+      fetch('/api/queue-status').then(function(r) { return r.json(); }).then(function(data) {
+        document.querySelectorAll('.query-status-badge').forEach(function(el) {
+          var qid = el.id.replace('qstatus-', '');
+          if (filterQid !== undefined && String(qid) !== String(filterQid)) return;
+          var state = data.queries[qid];
+          el.innerHTML = state ? _queueBadgeHTML[state] : '';
+        });
+        var active = Object.keys(data.queries).length > 0;
+        clearInterval(polling);
+        polling = setInterval(update, active ? 2000 : 10000);
+      }).catch(function() {});
+    }
+    update();
+    polling = setInterval(update, 10000);
+  }
   </script>
   {% block scripts %}{% endblock %}
 </body>
