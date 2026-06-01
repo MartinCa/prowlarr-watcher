@@ -21,6 +21,7 @@ import apprise
 import requests
 from croniter import croniter
 from flask import Flask, jsonify, redirect, render_template, request, url_for
+from markupsafe import escape
 
 # ---------------------------------------------------------------------------
 # Config & logging
@@ -634,8 +635,9 @@ def search_preview():
     job = work_queue.submit(
         query_text, label=f"preview:{uuid.uuid4().hex[:8]}", priority=Priority.HIGH
     )
+    safe_id = escape(job.job_id)
     return (
-        f'<div hx-get="/api/job/{job.job_id}/preview"'
+        f'<div hx-get="/api/job/{safe_id}/preview"'
         f' hx-trigger="load, every 1s"'
         f' hx-swap="outerHTML">'
         f'<span style="font-family:var(--mono);font-size:12px;color:var(--muted)">'
@@ -649,6 +651,7 @@ def job_preview(job_id: str):
     job = work_queue.get_job(job_id)
     if not job:
         return "<p class='preview-error'>Job expired or not found.</p>"
+    safe_id = escape(job_id)
     if job.status in ("queued", "running"):
         status_text = (
             "queued — waiting for other searches…"
@@ -656,7 +659,7 @@ def job_preview(job_id: str):
             else "searching Prowlarr…"
         )
         return (
-            f'<div hx-get="/api/job/{job_id}/preview"'
+            f'<div hx-get="/api/job/{safe_id}/preview"'
             f' hx-trigger="every 1s"'
             f' hx-swap="outerHTML">'
             f'<span style="font-family:var(--mono);font-size:12px;color:'
@@ -664,7 +667,7 @@ def job_preview(job_id: str):
             f"{status_text}</span></div>"
         )
     if job.status == "error":
-        return f"<p class='preview-error'>Search failed: {job.error}</p>"
+        return f"<p class='preview-error'>Search failed: {escape(job.error or '')}</p>"
     return render_template(
         "_results_fragment.html", results=job.result, format_size=format_size, is_preview=True
     )
