@@ -21,6 +21,7 @@
           <span class="dot {% if q.enabled %}dot-green{% else %}dot-muted{% endif %}"></span>
           {% if q.enabled %}active{% else %}paused{% endif %}
         </span>
+        <span class="tag query-status-badge" id="qstatus-{{ q.id }}"></span>
         <span class="tag">
           <span style="color:var(--muted)">query:</span>&nbsp;
           <span style="color:var(--text);font-family:var(--mono)">{{ q.query }}</span>
@@ -100,7 +101,7 @@
       <div class="form-group">
         <label>
           Preview
-          <span id="previewSpinner" class="htmx-indicator" style="color:var(--muted);font-size:11px;margin-left:8px">searching…</span>
+          <span id="previewSpinner" class="htmx-indicator" style="color:var(--muted);font-size:11px;margin-left:8px">searching Prowlarr…</span>
         </label>
         <div class="preview-box" id="previewBox">
           <span class="preview-empty">Type a query above to preview results from Prowlarr.</span>
@@ -148,5 +149,31 @@ document.getElementById('cronInput').addEventListener('input', function () {
   document.getElementById('cronGuruLink').href = 'https://crontab.guru/#' + expr.replace(/ /g, '_');
   document.getElementById('cronInputDesc').textContent = cronDesc(expr);
 });
+
+// Poll queue status and update badges
+(function() {
+  const badgeHTML = {
+    queued:  '<span class="status-badge status-queued"><span class="pulse"></span>QUEUED</span>',
+    running: '<span class="status-badge status-running"><span class="pulse"></span>RUNNING</span>',
+  };
+  let polling = null;
+
+  function update() {
+    fetch('/api/queue-status').then(r => r.json()).then(data => {
+      document.querySelectorAll('.query-status-badge').forEach(el => {
+        const qid = el.id.replace('qstatus-', '');
+        const state = data.queries[qid];
+        el.innerHTML = state ? badgeHTML[state] : '';
+      });
+      // Keep polling while anything is active, otherwise slow down
+      const active = Object.keys(data.queries).length > 0 || data.preview;
+      clearInterval(polling);
+      polling = setInterval(update, active ? 2000 : 10000);
+    }).catch(() => {});
+  }
+
+  update();
+  polling = setInterval(update, 10000);
+})();
 </script>
 {% endblock %}

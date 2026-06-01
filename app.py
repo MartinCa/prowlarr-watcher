@@ -138,24 +138,57 @@ class _ProwlarrLimiter:
     def __init__(self):
         self._lock = threading.Lock()
         self._last_request: float = 0.0
+        self._state_lock = threading.Lock()
+        self._queued: set[str] = set()
+        self._running: str | None = None
 
-    def search(self, query: str, categories: list[int] | None = None) -> list[dict]:
-        with self._lock:
-            wait = self._MIN_GAP - (time.monotonic() - self._last_request)
-            if wait > 0:
-                log.debug("Rate-limiting Prowlarr request, sleeping %.1fs", wait)
-                time.sleep(wait)
-            try:
-                return _prowlarr_search_raw(query, categories)
-            finally:
-                self._last_request = time.monotonic()
+    def search(
+        self,
+        query: str,
+        categories: list[int] | None = None,
+        label: str = "unknown",
+    ) -> list[dict]:
+        with self._state_lock:
+            self._queued.add(label)
+        try:
+            with self._lock:
+                with self._state_lock:
+                    self._queued.discard(label)
+                    self._running = label
+                wait = self._MIN_GAP - (time.monotonic() - self._last_request)
+                if wait > 0:
+                    log.debug("Rate-limiting Prowlarr request, sleeping %.1fs", wait)
+                    time.sleep(wait)
+                try:
+                    return _prowlarr_search_raw(query, categories)
+                finally:
+                    self._last_request = time.monotonic()
+                    with self._state_lock:
+                        self._running = None
+        except Exception:
+            with self._state_lock:
+                self._queued.discard(label)
+                if self._running == label:
+                    self._running = None
+            raise
+
+    def status(self) -> dict:
+        with self._state_lock:
+            return {"queued": set(self._queued), "running": self._running}
+
+    def is_busy(self) -> bool:
+        return self._lock.locked()
 
 
 _prowlarr_limiter = _ProwlarrLimiter()
 
 
-def prowlarr_search(query: str, categories: list[int] | None = None) -> list[dict]:
-    return _prowlarr_limiter.search(query, categories)
+def prowlarr_search(
+    query: str,
+    categories: list[int] | None = None,
+    label: str = "unknown",
+) -> list[dict]:
+    return _prowlarr_limiter.search(query, categories, label=label)
 
 
 def hash_result(r: dict) -> str:
@@ -238,7 +271,7 @@ class Scheduler:
         next_iso = self._compute_next(cron_expr)
 
         try:
-            raw = prowlarr_search(row["query"])
+            raw = prowlarr_search(row["query"], label=f"q:{qid}")
         except Exception as exc:
             log.error("[Q%d] Search failed: %s", qid, exc)
             with _db_lock, get_db() as conn:
@@ -393,8 +426,16 @@ def search_preview():
     query = request.form.get("query", "").strip()
     if not query:
         return "<p class='preview-empty'>Enter a query above to preview results.</p>"
+    if _prowlarr_limiter.is_busy():
+        return (
+            '<p class="preview-queued" style="font-family:var(--mono);font-size:12px;color:var(--yellow)">'
+            "Queued — waiting for other searches to finish…"
+            "</p>"
+            '<div hx-post="/api/search-preview" hx-trigger="load delay:2s"'
+            f' hx-target="#previewBox" hx-include="#queryInput"></div>'
+        )
     try:
-        raw = prowlarr_search(query)
+        raw = prowlarr_search(query, label="preview")
     except Exception as exc:
         return f"<p class='preview-error'>Search failed: {exc}</p>"
 
@@ -415,7 +456,7 @@ def add_query():
     now_iso = datetime.now(timezone.utc).isoformat()
     # Seed results silently
     try:
-        raw = prowlarr_search(query)
+        raw = prowlarr_search(query, label="seed")
     except Exception as exc:
         log.warning("Initial search failed for new query '%s': %s", query, exc)
         raw = []
@@ -500,6 +541,24 @@ def update_query(qid: int):
         return redirect(url_for("query_detail", qid=qid))
 
     return "Unknown action", 400
+
+
+@app.route("/api/queue-status")
+def queue_status():
+    """Return the current limiter state for UI polling."""
+    st = _prowlarr_limiter.status()
+    query_states: dict[str, str] = {}
+    for label in st["queued"]:
+        if label.startswith("q:"):
+            query_states[label[2:]] = "queued"
+    if st["running"] and st["running"].startswith("q:"):
+        query_states[st["running"][2:]] = "running"
+    preview_state = None
+    if "preview" in st["queued"]:
+        preview_state = "queued"
+    elif st["running"] == "preview":
+        preview_state = "running"
+    return jsonify({"queries": query_states, "preview": preview_state})
 
 
 @app.route("/api/test-prowlarr", methods=["POST"])

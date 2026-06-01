@@ -20,6 +20,7 @@
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Status</div>
     <span class="dot {% if q.enabled %}dot-green{% else %}dot-muted{% endif %}" style="margin-right:6px"></span>
     {% if q.enabled %}Active{% else %}Paused{% endif %}
+    <span class="query-status-badge" id="qstatus-{{ q.id }}" style="margin-left:8px"></span>
   </div>
   <div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Last run</div>
@@ -141,5 +142,29 @@ function updateQueryCronDesc() {
 }
 updateQueryCronDesc();
 queryCronInput.addEventListener('input', updateQueryCronDesc);
+
+// Poll queue status for this query
+(function() {
+  const qid = {{ q.id | tojson }};
+  const badgeHTML = {
+    queued:  '<span class="status-badge status-queued"><span class="pulse"></span>QUEUED</span>',
+    running: '<span class="status-badge status-running"><span class="pulse"></span>RUNNING</span>',
+  };
+  let polling = null;
+
+  function update() {
+    fetch('/api/queue-status').then(r => r.json()).then(data => {
+      const el = document.getElementById('qstatus-' + qid);
+      const state = data.queries[String(qid)];
+      el.innerHTML = state ? badgeHTML[state] : '';
+      const active = !!state;
+      clearInterval(polling);
+      polling = setInterval(update, active ? 2000 : 10000);
+    }).catch(() => {});
+  }
+
+  update();
+  polling = setInterval(update, 10000);
+})();
 </script>
 {% endblock %}

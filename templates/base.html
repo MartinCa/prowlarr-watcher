@@ -234,6 +234,20 @@
     /* Cron inline edit */
     .inline-form { display: flex; align-items: center; gap: 8px; }
     .inline-form input { width: 160px; }
+
+    /* Queue status badges */
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-family: var(--mono); font-size: 10px; font-weight: 500;
+      padding: 2px 8px; border-radius: 2px; border: 1px solid;
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .status-queued { color: var(--yellow); border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.08); }
+    .status-running { color: var(--blue); border-color: rgba(96,165,250,.35); background: rgba(96,165,250,.08); }
+    @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+    .status-badge .pulse { width: 6px; height: 6px; border-radius: 50%; animation: pulse-dot 1.5s ease-in-out infinite; }
+    .status-queued .pulse { background: var(--yellow); }
+    .status-running .pulse { background: var(--blue); }
   </style>
 </head>
 <body>
