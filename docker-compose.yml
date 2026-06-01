@@ -1,0 +1,18 @@
+services:
+  prowlarr-watcher:
+    build: .
+    container_name: prowlarr-watcher
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/data:z
+    environment:
+      TZ: Europe/London  # Change to your timezone
+    # If Prowlarr is on the same Docker network:
+    # networks:
+    #   - arr-network
+
+# networks:
+#   arr-network:
+#     external: true

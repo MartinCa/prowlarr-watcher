@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Queries — Prowlarr Watcher{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>QUERIES</h1>
+  <span class="subtitle">{{ queries|length }} configured</span>
+  <div style="flex:1"></div>
+  <button class="btn btn-primary" onclick="openModal()">+ Add Query</button>
+</div>
+
+{% if queries %}
+  {% for q in queries %}
+  <div class="query-card {% if not q.enabled %}disabled{% endif %}">
+    <div>
+      <div class="query-name">
+        <a href="/query/{{ q.id }}">{{ q.name }}</a>
+      </div>
+      <div class="query-meta">
+        <span class="tag">
+          <span class="dot {% if q.enabled %}dot-green{% else %}dot-muted{% endif %}"></span>
+          {% if q.enabled %}active{% else %}paused{% endif %}
+        </span>
+        <span class="tag">
+          <span style="color:var(--muted)">query:</span>&nbsp;
+          <span style="color:var(--text);font-family:var(--mono)">{{ q.query }}</span>
+        </span>
+        <span class="tag">
+          <span style="color:var(--muted)">cron:</span>&nbsp;
+          <span style="font-family:var(--mono)">{{ q.cron or default_cron }}</span>
+          {% if not q.cron %}<span style="color:var(--muted);font-size:10px">&nbsp;(default)</span>{% endif %}
+          <span style="color:var(--muted);font-size:10px" data-cron="{{ q.cron or default_cron }}"></span>
+        </span>
+        <span class="tag">last run: {{ q.last_run|timeago }}</span>
+        {% if q.next_run and q.enabled %}
+        <span class="tag">next: {{ q.next_run|timeago }}</span>
+        {% endif %}
+        {% if q.last_count is not none %}
+        <span class="tag">{{ q.last_count }} results</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="query-actions">
+      <form method="POST" action="/api/query/{{ q.id }}" style="display:inline">
+        <input type="hidden" name="action" value="run_now">
+        <button class="btn btn-sm btn-ghost" title="Run now">▶</button>
+      </form>
+      <form method="POST" action="/api/query/{{ q.id }}" style="display:inline">
+        <input type="hidden" name="action" value="toggle">
+        <button class="btn btn-sm btn-ghost" title="{% if q.enabled %}Pause{% else %}Resume{% endif %}">
+          {% if q.enabled %}⏸{% else %}▶{% endif %}
+        </button>
+      </form>
+      <form method="POST" action="/api/query/{{ q.id }}" style="display:inline"
+            onsubmit="return confirm('Delete this query and all its results?')">
+        <input type="hidden" name="action" value="delete">
+        <button class="btn btn-sm btn-danger" title="Delete">✕</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty-state">
+    <div class="big">//</div>
+    <div>No queries yet. Add one to start watching.</div>
+    <br>
+    <button class="btn btn-primary" onclick="openModal()">+ Add your first query</button>
+  </div>
+{% endif %}
+
+<!-- ---- Add Query Modal ---- -->
+<div class="modal-backdrop" id="modal" onclick="maybeClose(event)">
+  <div class="modal">
+    <div class="modal-title">// New Query</div>
+    <form method="POST" action="/api/query" id="addForm">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" name="name" id="queryName" placeholder="e.g. Ubuntu ISOs" required autofocus>
+      </div>
+
+      <div class="form-group">
+        <label>Search Query</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" name="query" id="queryInput"
+            placeholder="e.g. ubuntu 24.04"
+            required
+            style="flex:1">
+          <button type="button" class="btn btn-ghost"
+            hx-post="/api/search-preview"
+            hx-trigger="click"
+            hx-target="#previewBox"
+            hx-include="#queryInput"
+            hx-indicator="#previewSpinner">Preview</button>
+        </div>
+        <div class="hint">
+          Tip: results are seeded on first add — you'll only be notified about <em>new</em> results after that.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>
+          Preview
+          <span id="previewSpinner" class="htmx-indicator" style="color:var(--muted);font-size:11px;margin-left:8px">searching…</span>
+        </label>
+        <div class="preview-box" id="previewBox">
+          <span class="preview-empty">Type a query above to preview results from Prowlarr.</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Cron Schedule <span style="font-weight:300">(optional — leave blank to use default: {{ default_cron }})</span></label>
+        <input type="text" name="cron" id="cronInput" placeholder="e.g. 0 * * * *  (leave blank for default)">
+        <div class="hint" id="cronInputDesc" style="color:var(--text)"></div>
+        <div class="hint">min hour dom month dow — <a id="cronGuruLink" href="https://crontab.guru/#{{ default_cron.replace(' ', '_') }}" target="_blank">crontab.guru</a></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Query</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openModal() {
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('queryName').focus();
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+function maybeClose(e) {
+  if (e.target === document.getElementById('modal')) closeModal();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+document.querySelectorAll('[data-cron]').forEach(el => {
+  const d = cronDesc(el.dataset.cron);
+  if (d) el.textContent = '— ' + d;
+});
+
+const defaultCron = {{ default_cron | tojson }};
+document.getElementById('cronInput').addEventListener('input', function () {
+  const expr = this.value.trim() || defaultCron;
+  document.getElementById('cronGuruLink').href = 'https://crontab.guru/#' + expr.replace(/ /g, '_');
+  document.getElementById('cronInputDesc').textContent = cronDesc(expr);
+});
+</script>
+{% endblock %}

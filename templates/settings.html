@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Settings — Prowlarr Watcher{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>SETTINGS</h1>
+</div>
+
+{% if saved %}
+<div class="flash">✓ Settings saved.</div>
+{% endif %}
+
+<form method="POST" action="/settings">
+  <div class="card" style="margin-bottom:16px">
+    <div class="section-title" style="margin-bottom:20px">Prowlarr</div>
+
+    <div class="form-group">
+      <label>Prowlarr URL</label>
+      <input type="text" name="prowlarr_url" value="{{ prowlarr_url }}" placeholder="http://prowlarr:9696">
+      <div class="hint">Include the port. No trailing slash.</div>
+    </div>
+
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="text" name="prowlarr_api_key" value="{{ prowlarr_api_key }}" placeholder="your api key">
+      <div class="hint">Found in Prowlarr → Settings → General → Security.</div>
+    </div>
+
+    <button type="button" class="btn btn-ghost btn-sm" id="testProwlarrBtn" onclick="testProwlarr()">
+      Test connection
+    </button>
+    <span id="testProwlarrResult" style="font-family:var(--mono);font-size:12px;margin-left:12px"></span>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="section-title" style="margin-bottom:20px">Scheduling</div>
+
+    <div class="form-group">
+      <label>Default Cron Schedule</label>
+      <input type="text" name="default_cron" id="defaultCronInput" value="{{ default_cron }}" placeholder="0 * * * *" style="max-width:220px">
+      <div class="hint" id="defaultCronDesc" style="color:var(--text)"></div>
+      <div class="hint">
+        Applied to queries that don't have their own schedule.
+        <a id="defaultCronGuruLink" href="https://crontab.guru/#{{ default_cron.replace(' ', '_') }}" target="_blank">crontab.guru</a> for syntax help.
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <div class="section-title" style="margin-bottom:20px">Notifications</div>
+
+    <div class="form-group">
+      <label>Apprise URLs</label>
+      <textarea name="apprise_urls" rows="5" placeholder="gotify://hostname/token&#10;ntfys://ntfy.sh/topic&#10;tgram://bot_token/chat_id&#10;discord://webhook_id/webhook_token">{{ apprise_urls }}</textarea>
+      <div class="hint">
+        One URL per line. See the
+        <a href="https://github.com/caronc/apprise/wiki" target="_blank">Apprise wiki</a>
+        for all supported services.
+      </div>
+    </div>
+
+    <button type="button" class="btn btn-ghost btn-sm" id="testBtn" onclick="testApprise()">
+      Send test notification
+    </button>
+    <span id="testResult" style="font-family:var(--mono);font-size:12px;margin-left:12px"></span>
+  </div>
+
+  <div style="display:flex;gap:10px">
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+    <a href="/" class="btn btn-ghost">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const defaultCronInput = document.getElementById('defaultCronInput');
+document.getElementById('defaultCronDesc').textContent = cronDesc(defaultCronInput.value);
+defaultCronInput.addEventListener('input', function () {
+  const expr = this.value.trim() || '* * * * *';
+  document.getElementById('defaultCronGuruLink').href = 'https://crontab.guru/#' + expr.replace(/ /g, '_');
+  document.getElementById('defaultCronDesc').textContent = cronDesc(expr);
+});
+
+async function testProwlarr() {
+  const btn = document.getElementById('testProwlarrBtn');
+  const res = document.getElementById('testProwlarrResult');
+  btn.disabled = true;
+  res.textContent = 'connecting…';
+  res.style.color = 'var(--muted)';
+  try {
+    const body = new FormData();
+    body.append('prowlarr_url',     document.querySelector('[name=prowlarr_url]').value);
+    body.append('prowlarr_api_key', document.querySelector('[name=prowlarr_api_key]').value);
+    const r = await fetch('/api/test-prowlarr', { method: 'POST', body });
+    const data = await r.json();
+    res.textContent = data.message;
+    res.style.color = data.ok ? 'var(--green)' : 'var(--red)';
+  } catch(e) {
+    res.textContent = 'Request failed';
+    res.style.color = 'var(--red)';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function testApprise() {
+  const btn = document.getElementById('testBtn');
+  const res = document.getElementById('testResult');
+  btn.disabled = true;
+  res.textContent = 'sending…';
+  res.style.color = 'var(--muted)';
+  try {
+    const body = new FormData();
+    body.append('apprise_urls', document.querySelector('[name=apprise_urls]').value);
+    const r = await fetch('/api/test-apprise', { method: 'POST', body });
+    const data = await r.json();
+    res.textContent = data.message;
+    res.style.color = data.ok ? 'var(--green)' : 'var(--red)';
+  } catch(e) {
+    res.textContent = 'Request failed';
+    res.style.color = 'var(--red)';
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

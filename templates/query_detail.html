@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}{{ q.name }} — Prowlarr Watcher{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>
+    <a href="/" style="color:var(--muted);font-size:14px">QUERIES</a>
+    <span style="color:var(--border2);margin:0 8px">/</span>
+    {{ q.name }}
+  </h1>
+</div>
+
+<!-- Query info bar -->
+<div class="card" style="margin-bottom:20px;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;">
+  <div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Search query</div>
+    <code style="font-size:14px;color:var(--accent)">{{ q.query }}</code>
+  </div>
+  <div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Status</div>
+    <span class="dot {% if q.enabled %}dot-green{% else %}dot-muted{% endif %}" style="margin-right:6px"></span>
+    {% if q.enabled %}Active{% else %}Paused{% endif %}
+  </div>
+  <div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Last run</div>
+    {{ q.last_run|timeago }}
+  </div>
+  <div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Next run</div>
+    {{ q.next_run|timeago if q.next_run and q.enabled else '—' }}
+  </div>
+  <div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Total results</div>
+    {{ results|length }}
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+    <form method="POST" action="/api/query/{{ q.id }}">
+      <input type="hidden" name="action" value="run_now">
+      <button class="btn btn-primary btn-sm">▶ Run Now</button>
+    </form>
+    <form method="POST" action="/api/query/{{ q.id }}">
+      <input type="hidden" name="action" value="toggle">
+      <button class="btn btn-sm">{% if q.enabled %}⏸ Pause{% else %}▶ Resume{% endif %}</button>
+    </form>
+    <form method="POST" action="/api/query/{{ q.id }}" onsubmit="return confirm('Delete this query and all its results?')">
+      <input type="hidden" name="action" value="delete">
+      <button class="btn btn-sm btn-danger">✕ Delete</button>
+    </form>
+  </div>
+</div>
+
+<!-- Cron override -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="section-header" style="margin-bottom:12px">
+    <span class="section-title">Schedule</span>
+  </div>
+  <form method="POST" action="/api/query/{{ q.id }}" class="inline-form">
+    <input type="hidden" name="action" value="update_cron">
+    <input type="text" name="cron" id="queryCronInput" placeholder="{{ default_cron }}"
+           value="{{ q.cron or '' }}"
+           style="width:200px;font-family:var(--mono);font-size:13px">
+    <button class="btn btn-sm">Save</button>
+    {% if q.cron %}
+    <span style="font-size:12px;color:var(--muted)">Override active — leave blank to use default ({{ default_cron }})</span>
+    {% else %}
+    <span style="font-size:12px;color:var(--muted)">Using default: <code style="color:var(--text)">{{ default_cron }}</code></span>
+    {% endif %}
+  </form>
+  <div class="hint" id="queryCronDesc" style="margin-top:8px;color:var(--text)"></div>
+</div>
+
+<!-- Results -->
+<div class="section-header">
+  <span class="section-title">Results ({{ results|length }})</span>
+  {% set new_count = results|selectattr("is_new", "equalto", 1)|list|length %}
+  {% if new_count > 0 %}
+  <span class="badge badge-new">{{ new_count }} new</span>
+  {% endif %}
+</div>
+
+{% if results %}
+<div class="results-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th></th>
+        <th>Title</th>
+        <th>Indexer</th>
+        <th>Size</th>
+        <th>Seeders</th>
+        <th>First seen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in results %}
+      <tr class="{% if r.is_new %}result-new{% endif %}">
+        <td style="width:40px">
+          {% if r.is_new %}<span class="badge badge-new" style="font-size:9px">NEW</span>{% endif %}
+        </td>
+        <td class="result-title">
+          {% if r.info_url %}
+            <a href="{{ r.info_url }}" target="_blank" rel="noopener">{{ r.title or '—' }}</a>
+          {% else %}
+            {{ r.title or '—' }}
+          {% endif %}
+          {% if r.download_url %}
+          <a href="{{ r.download_url }}" target="_blank" rel="noopener"
+             style="margin-left:8px;font-size:11px;color:var(--muted)">↓</a>
+          {% endif %}
+        </td>
+        <td><span class="badge badge-indexer">{{ r.indexer or '—' }}</span></td>
+        <td style="font-family:var(--mono);font-size:12px;white-space:nowrap">{{ r.size|fmt_size }}</td>
+        <td style="font-family:var(--mono);font-size:12px">
+          {% if r.seeders is not none %}
+            <span style="color:{% if r.seeders > 10 %}var(--green){% elif r.seeders > 0 %}var(--yellow){% else %}var(--red){% endif %}">
+              {{ r.seeders }}
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap">
+          {{ r.first_seen|timeago }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state" style="padding:40px 0">
+  <div>No results yet — run the query to populate.</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const qDefaultCron = {{ default_cron | tojson }};
+const queryCronInput = document.getElementById('queryCronInput');
+function updateQueryCronDesc() {
+  document.getElementById('queryCronDesc').textContent = cronDesc(queryCronInput.value.trim() || qDefaultCron);
+}
+updateQueryCronDesc();
+queryCronInput.addEventListener('input', updateQueryCronDesc);
+</script>
+{% endblock %}

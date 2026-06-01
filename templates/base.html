@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Prowlarr Watcher{% endblock %}</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #0e0e0f;
+      --bg2:       #161618;
+      --bg3:       #1e1e21;
+      --border:    #2a2a2e;
+      --border2:   #3a3a40;
+      --text:      #d4d4d8;
+      --muted:     #71717a;
+      --accent:    #f97316;
+      --accent2:   #fb923c;
+      --green:     #4ade80;
+      --red:       #f87171;
+      --yellow:    #fbbf24;
+      --blue:      #60a5fa;
+      --radius:    4px;
+      --mono:      'IBM Plex Mono', monospace;
+      --sans:      'IBM Plex Sans', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* Subtle scan-line texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent2); }
+
+    /* ---- Nav ---- */
+    nav {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      height: 48px;
+    }
+    .nav-brand {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .nav-brand span { color: var(--muted); }
+    nav a {
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      padding: 4px 0;
+      border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+    }
+    nav a:hover, nav a.active { color: var(--text); border-bottom-color: var(--accent); }
+    .nav-spacer { flex: 1; }
+
+    /* ---- Layout ---- */
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ---- Page heading ---- */
+    .page-header { margin-bottom: 28px; display: flex; align-items: baseline; gap: 16px; }
+    h1 { font-family: var(--mono); font-size: 18px; font-weight: 500; color: var(--text); letter-spacing: 0.02em; }
+    .page-header .subtitle { font-size: 13px; color: var(--muted); }
+
+    /* ---- Buttons ---- */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--mono); font-size: 12px; font-weight: 500;
+      padding: 6px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border2);
+      background: var(--bg3);
+      color: var(--text);
+      cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s;
+      letter-spacing: 0.04em;
+    }
+    .btn:hover { background: var(--border); border-color: var(--border2); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #0e0e0f; font-weight: 500; }
+    .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); color: #0e0e0f; }
+    .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
+    .btn-ghost:hover { background: var(--bg3); color: var(--text); border-color: var(--border); }
+    .btn-danger { border-color: var(--red); color: var(--red); background: transparent; }
+    .btn-danger:hover { background: rgba(248,113,113,.1); }
+    .btn-sm { padding: 3px 9px; font-size: 11px; }
+
+    /* ---- Forms ---- */
+    .form-group { margin-bottom: 18px; }
+    label { display: block; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+    input[type=text], input[type=url], input[type=password], textarea, select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 80px; }
+    .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ---- Cards ---- */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .card + .card { margin-top: 12px; }
+
+    /* ---- Query list ---- */
+    .query-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 16px;
+      transition: border-color .15s;
+    }
+    .query-card:hover { border-color: var(--border2); }
+    .query-card + .query-card { margin-top: 10px; }
+    .query-card.disabled { opacity: .5; }
+    .query-name { font-size: 15px; font-weight: 500; color: var(--text); }
+    .query-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
+    .query-meta .tag { display: inline-flex; align-items: center; gap: 4px; }
+    .query-actions { display: flex; align-items: center; gap: 6px; grid-row: span 2; align-self: center; }
+
+    /* ---- Status dots ---- */
+    .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot-red   { background: var(--red); }
+    .dot-muted { background: var(--border2); }
+
+    /* ---- Results table ---- */
+    .results-wrap { overflow-x: auto; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { border-bottom: 2px solid var(--border); }
+    th {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted);
+      padding: 8px 12px; text-align: left; white-space: nowrap;
+    }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg3); }
+    .result-new td:first-child { border-left: 2px solid var(--accent); }
+    .result-title { color: var(--text); max-width: 480px; }
+    .result-title a { color: var(--text); }
+    .result-title a:hover { color: var(--accent); }
+    .badge { display: inline-block; font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 2px; border: 1px solid; }
+    .badge-new { color: var(--accent); border-color: var(--accent); background: rgba(249,115,22,.08); }
+    .badge-indexer { color: var(--blue); border-color: rgba(96,165,250,.3); background: rgba(96,165,250,.06); }
+
+    /* ---- Modal ---- */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.7); backdrop-filter: blur(3px);
+      z-index: 100; align-items: center; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      width: 680px; max-width: 95vw; max-height: 90vh;
+      overflow-y: auto;
+      padding: 28px;
+      animation: modalIn .15s ease;
+    }
+    @keyframes modalIn { from { opacity:0; transform: translateY(-8px); } to { opacity:1; transform: none; } }
+    .modal-title { font-family: var(--mono); font-size: 14px; font-weight: 500; color: var(--accent); margin-bottom: 24px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+
+    /* ---- Preview area ---- */
+    .preview-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      min-height: 80px;
+      padding: 12px;
+      margin-top: 8px;
+    }
+    .preview-empty, .preview-error { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+    .preview-error { color: var(--red); }
+    .htmx-indicator { display: none; }
+    .htmx-request.htmx-indicator { display: inline; }
+
+    /* ---- Misc ---- */
+    .empty-state { text-align: center; padding: 64px 0; color: var(--muted); font-size: 13px; }
+    .empty-state .big { font-family: var(--mono); font-size: 32px; margin-bottom: 12px; color: var(--border2); }
+    .flash { background: rgba(74,222,128,.1); border: 1px solid var(--green); color: var(--green); padding: 10px 16px; border-radius: var(--radius); margin-bottom: 20px; font-size: 13px; }
+
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .section-title { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+
+    /* Cron inline edit */
+    .inline-form { display: flex; align-items: center; gap: 8px; }
+    .inline-form input { width: 160px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand">PROWLARR<span>/</span>WATCHER</span>
+    <a href="/" class="{% if request.endpoint == 'index' %}active{% endif %}">Queries</a>
+    <a href="/settings" class="{% if request.endpoint == 'settings' %}active{% endif %}">Settings</a>
+  </nav>
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/cronstrue/dist/cronstrue.min.js"></script>
+  <script>
+  function cronDesc(expr) {
+    try { return cronstrue.toString(expr, { use24HourTimeFormat: true }); } catch(e) { return ''; }
+  }
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

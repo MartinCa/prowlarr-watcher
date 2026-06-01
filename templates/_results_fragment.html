@@ -1,0 +1,49 @@
+{% if results %}
+<div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead>
+      <tr>
+        <th style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);letter-spacing:.06em;text-transform:uppercase">Title</th>
+        <th style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap">Indexer</th>
+        <th style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);letter-spacing:.06em;text-transform:uppercase">Size</th>
+        {% if not is_preview %}
+        <th style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);letter-spacing:.06em;text-transform:uppercase">Seeds</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in results[:30] %}
+      <tr>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text);max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          {{ r.get('title', '—') }}
+        </td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap">
+          <span class="badge badge-indexer">{{ r.get('indexer', '—') }}</span>
+        </td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border);font-family:var(--mono);white-space:nowrap">
+          {{ format_size(r.get('size')) }}
+        </td>
+        {% if not is_preview %}
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border);font-family:var(--mono)">
+          {% set s = r.get('seeders') %}
+          {% if s is not none %}
+            <span style="color:{% if s > 10 %}var(--green){% elif s > 0 %}var(--yellow){% else %}var(--red){% endif %}">{{ s }}</span>
+          {% else %}—{% endif %}
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if results|length > 30 %}
+  <div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:8px 10px">
+    … and {{ results|length - 30 }} more results
+  </div>
+  {% endif %}
+  <div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:8px 10px;border-top:1px solid var(--border)">
+    {{ results|length }} result{{ 's' if results|length != 1 }} — these will be seeded silently, you'll only be notified about new results after this.
+  </div>
+</div>
+{% else %}
+<p class="preview-empty">No results found for this query.</p>
+{% endif %}
