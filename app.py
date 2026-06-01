@@ -90,6 +90,7 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('prowlarr_api_key', '')")
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('default_cron', '0 * * * *')")
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('apprise_urls', '')")
+        conn.execute("INSERT OR IGNORE INTO settings VALUES ('min_query_interval', '10')")
         conn.commit()
 
 
@@ -131,53 +132,68 @@ def _prowlarr_search_raw(query: str, categories: list[int] | None = None) -> lis
 
 
 class _ProwlarrLimiter:
-    """Ensures at most one Prowlarr search in flight and a minimum gap between requests."""
+    """Priority queue ensuring one Prowlarr search at a time with a configurable gap."""
 
-    _MIN_GAP = 10.0  # seconds
+    PRIORITY_HIGH = 0  # interactive (preview, seed)
+    PRIORITY_LOW = 1  # scheduled queries
 
     def __init__(self):
-        self._lock = threading.Lock()
+        self._cond = threading.Condition(threading.Lock())
         self._last_request: float = 0.0
-        self._state_lock = threading.Lock()
-        self._queued: set[str] = set()
+        self._seq = 0
+        self._waiters: dict[str, tuple[int, int]] = {}  # label -> (priority, seq)
         self._running: str | None = None
+
+    def _min_gap(self) -> float:
+        try:
+            return max(0.0, float(get_setting("min_query_interval", "10")))
+        except (ValueError, TypeError):
+            return 10.0
 
     def search(
         self,
         query: str,
         categories: list[int] | None = None,
         label: str = "unknown",
+        priority: int = PRIORITY_LOW,
     ) -> list[dict]:
-        with self._state_lock:
-            self._queued.add(label)
+        with self._cond:
+            self._seq += 1
+            ticket = (priority, self._seq)
+            self._waiters[label] = ticket
+            try:
+                while self._running is not None or min(self._waiters.values()) != ticket:
+                    self._cond.wait()
+            except BaseException:
+                self._waiters.pop(label, None)
+                self._cond.notify_all()
+                raise
+
+            del self._waiters[label]
+            self._running = label
+
         try:
-            with self._lock:
-                with self._state_lock:
-                    self._queued.discard(label)
-                    self._running = label
-                wait = self._MIN_GAP - (time.monotonic() - self._last_request)
-                if wait > 0:
-                    log.debug("Rate-limiting Prowlarr request, sleeping %.1fs", wait)
-                    time.sleep(wait)
-                try:
-                    return _prowlarr_search_raw(query, categories)
-                finally:
-                    self._last_request = time.monotonic()
-                    with self._state_lock:
-                        self._running = None
-        except Exception:
-            with self._state_lock:
-                self._queued.discard(label)
-                if self._running == label:
-                    self._running = None
-            raise
+            wait = self._min_gap() - (time.monotonic() - self._last_request)
+            if wait > 0:
+                log.debug("Rate-limiting Prowlarr request, sleeping %.1fs", wait)
+                time.sleep(wait)
+            return _prowlarr_search_raw(query, categories)
+        finally:
+            self._last_request = time.monotonic()
+            with self._cond:
+                self._running = None
+                self._cond.notify_all()
 
     def status(self) -> dict:
-        with self._state_lock:
-            return {"queued": set(self._queued), "running": self._running}
+        with self._cond:
+            return {
+                "queued": {k for k in self._waiters},
+                "running": self._running,
+            }
 
     def is_busy(self) -> bool:
-        return self._lock.locked()
+        with self._cond:
+            return self._running is not None or bool(self._waiters)
 
 
 _prowlarr_limiter = _ProwlarrLimiter()
@@ -187,8 +203,9 @@ def prowlarr_search(
     query: str,
     categories: list[int] | None = None,
     label: str = "unknown",
+    priority: int = _ProwlarrLimiter.PRIORITY_LOW,
 ) -> list[dict]:
-    return _prowlarr_limiter.search(query, categories, label=label)
+    return _prowlarr_limiter.search(query, categories, label=label, priority=priority)
 
 
 def hash_result(r: dict) -> str:
@@ -384,6 +401,10 @@ def settings():
         set_setting("prowlarr_url", request.form.get("prowlarr_url", "").strip())
         set_setting("prowlarr_api_key", request.form.get("prowlarr_api_key", "").strip())
         set_setting("default_cron", request.form.get("default_cron", "0 * * * *").strip())
+        set_setting(
+            "min_query_interval",
+            request.form.get("min_query_interval", "10").strip(),
+        )
         set_setting("apprise_urls", request.form.get("apprise_urls", "").strip())
         scheduler.poke()
         return redirect(url_for("settings") + "?saved=1")
@@ -393,6 +414,7 @@ def settings():
         prowlarr_url=get_setting("prowlarr_url"),
         prowlarr_api_key=get_setting("prowlarr_api_key"),
         default_cron=get_setting("default_cron"),
+        min_query_interval=get_setting("min_query_interval", "10"),
         apprise_urls=get_setting("apprise_urls"),
         saved=request.args.get("saved"),
     )
@@ -426,16 +448,10 @@ def search_preview():
     query = request.form.get("query", "").strip()
     if not query:
         return "<p class='preview-empty'>Enter a query above to preview results.</p>"
-    if _prowlarr_limiter.is_busy():
-        return (
-            '<p class="preview-queued" style="font-family:var(--mono);font-size:12px;color:var(--yellow)">'
-            "Queued — waiting for other searches to finish…"
-            "</p>"
-            '<div hx-post="/api/search-preview" hx-trigger="load delay:2s"'
-            f' hx-target="#previewBox" hx-include="#queryInput"></div>'
-        )
     try:
-        raw = prowlarr_search(query, label="preview")
+        raw = prowlarr_search(
+            query, label="preview", priority=_ProwlarrLimiter.PRIORITY_HIGH
+        )
     except Exception as exc:
         return f"<p class='preview-error'>Search failed: {exc}</p>"
 
@@ -456,7 +472,9 @@ def add_query():
     now_iso = datetime.now(timezone.utc).isoformat()
     # Seed results silently
     try:
-        raw = prowlarr_search(query, label="seed")
+        raw = prowlarr_search(
+            query, label="seed", priority=_ProwlarrLimiter.PRIORITY_HIGH
+        )
     except Exception as exc:
         log.warning("Initial search failed for new query '%s': %s", query, exc)
         raw = []

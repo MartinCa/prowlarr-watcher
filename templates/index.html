@@ -150,12 +150,13 @@ document.getElementById('cronInput').addEventListener('input', function () {
   document.getElementById('cronInputDesc').textContent = cronDesc(expr);
 });
 
-// Poll queue status and update badges
+// Poll queue status and update badges + preview indicator
 (function() {
   const badgeHTML = {
     queued:  '<span class="status-badge status-queued"><span class="pulse"></span>QUEUED</span>',
     running: '<span class="status-badge status-running"><span class="pulse"></span>RUNNING</span>',
   };
+  const previewText = { queued: 'queued — waiting…', running: 'searching Prowlarr…' };
   let polling = null;
 
   function update() {
@@ -165,7 +166,10 @@ document.getElementById('cronInput').addEventListener('input', function () {
         const state = data.queries[qid];
         el.innerHTML = state ? badgeHTML[state] : '';
       });
-      // Keep polling while anything is active, otherwise slow down
+      const spinner = document.getElementById('previewSpinner');
+      if (spinner && data.preview) {
+        spinner.textContent = previewText[data.preview] || 'searching Prowlarr…';
+      }
       const active = Object.keys(data.queries).length > 0 || data.preview;
       clearInterval(polling);
       polling = setInterval(update, active ? 2000 : 10000);

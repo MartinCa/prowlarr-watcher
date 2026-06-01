@@ -44,6 +44,16 @@
         <a id="defaultCronGuruLink" href="https://crontab.guru/#{{ default_cron.replace(' ', '_') }}" target="_blank">crontab.guru</a> for syntax help.
       </div>
     </div>
+
+    <div class="form-group">
+      <label>Minimum Query Interval (seconds)</label>
+      <input type="text" name="min_query_interval" value="{{ min_query_interval }}" placeholder="10" style="max-width:120px">
+      <div class="hint">
+        Minimum seconds between Prowlarr API requests. Prevents overloading Prowlarr
+        when many queries share the same schedule. Interactive requests (preview, seed)
+        are prioritised over scheduled queries.
+      </div>
+    </div>
   </div>
 
   <div class="card" style="margin-bottom:24px">
