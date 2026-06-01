@@ -14,14 +14,17 @@ ruff check .
 ruff format --check .
 ruff format .          # auto-fix
 
+# Tests
+pytest test_app.py -v          # all tests
+pytest test_app.py::TestWorkQueue -v   # single class
+pytest test_app.py::TestWorkQueue::test_priority_ordering -v  # single test
+
 # Run locally (outside Docker)
 DATA_DIR=./data python app.py
 
 # Docker
 docker compose up -d
 ```
-
-There is no test suite.
 
 ## Architecture
 
