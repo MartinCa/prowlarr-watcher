@@ -108,7 +108,7 @@ def set_setting(key: str, value: str):
 # ---------------------------------------------------------------------------
 # Prowlarr API helpers
 # ---------------------------------------------------------------------------
-def prowlarr_search(query: str, categories: list[int] | None = None) -> list[dict]:
+def _prowlarr_search_raw(query: str, categories: list[int] | None = None) -> list[dict]:
     base = get_setting("prowlarr_url").rstrip("/")
     api_key = get_setting("prowlarr_api_key")
     if not base or not api_key:
@@ -128,6 +128,34 @@ def prowlarr_search(query: str, categories: list[int] | None = None) -> list[dic
     results = resp.json()
     log.info("Search %r → %d results", query, len(results))
     return results
+
+
+class _ProwlarrLimiter:
+    """Ensures at most one Prowlarr search in flight and a minimum gap between requests."""
+
+    _MIN_GAP = 10.0  # seconds
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._last_request: float = 0.0
+
+    def search(self, query: str, categories: list[int] | None = None) -> list[dict]:
+        with self._lock:
+            wait = self._MIN_GAP - (time.monotonic() - self._last_request)
+            if wait > 0:
+                log.debug("Rate-limiting Prowlarr request, sleeping %.1fs", wait)
+                time.sleep(wait)
+            try:
+                return _prowlarr_search_raw(query, categories)
+            finally:
+                self._last_request = time.monotonic()
+
+
+_prowlarr_limiter = _ProwlarrLimiter()
+
+
+def prowlarr_search(query: str, categories: list[int] | None = None) -> list[dict]:
+    return _prowlarr_limiter.search(query, categories)
 
 
 def hash_result(r: dict) -> str:
