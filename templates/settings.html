@@ -26,6 +26,12 @@
       <div class="hint">Found in Prowlarr → Settings → General → Security.</div>
     </div>
 
+    <div class="form-group">
+      <label>Request Timeout (seconds)</label>
+      <input type="text" name="prowlarr_timeout" value="{{ prowlarr_timeout }}" placeholder="200" style="max-width:120px">
+      <div class="hint">Seconds before a Prowlarr search request times out.</div>
+    </div>
+
     <button type="button" class="btn btn-ghost btn-sm" id="testProwlarrBtn" onclick="testProwlarr()">
       Test connection
     </button>

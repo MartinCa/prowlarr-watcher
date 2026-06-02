@@ -20,11 +20,12 @@ def prowlarr_search_raw(query: str, categories: list[int] | None = None) -> list
     if categories:
         params["categories"] = categories
 
+    timeout = int(get_setting("prowlarr_timeout", "200"))
     resp = requests.get(
         f"{base}/api/v1/search",
         headers={"X-Api-Key": api_key},
         params=params,
-        timeout=200,
+        timeout=timeout,
     )
     resp.raise_for_status()
     results = resp.json()

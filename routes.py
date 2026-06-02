@@ -42,6 +42,7 @@ def settings():
             request.form.get("min_query_interval", "10").strip(),
         )
         set_setting("max_retries", request.form.get("max_retries", "5").strip())
+        set_setting("prowlarr_timeout", request.form.get("prowlarr_timeout", "200").strip())
         set_setting("apprise_urls", request.form.get("apprise_urls", "").strip())
         scheduler.poke()
         return redirect(url_for("main.settings") + "?saved=1")
@@ -53,6 +54,7 @@ def settings():
         default_cron=get_setting("default_cron"),
         min_query_interval=get_setting("min_query_interval", "10"),
         max_retries=get_setting("max_retries", "5"),
+        prowlarr_timeout=get_setting("prowlarr_timeout", "200"),
         apprise_urls=get_setting("apprise_urls"),
         saved=request.args.get("saved"),
     )
