@@ -1,5 +1,6 @@
 """Flask routes — pages and API endpoints."""
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -13,6 +14,8 @@ from db import _db_lock, get_db, get_setting, set_setting
 from prowlarr import format_size
 from scheduler import Scheduler, scheduler
 from worker import Priority, work_queue
+
+log = logging.getLogger("prowlarr-watcher")
 
 bp = Blueprint("main", __name__)
 
@@ -257,8 +260,9 @@ def test_prowlarr():
         code = exc.response.status_code
         msg = "Unauthorized — check the API key" if code == 401 else f"HTTP {code}"
         return jsonify({"ok": False, "message": msg})
-    except Exception as exc:
-        return jsonify({"ok": False, "message": str(exc)})
+    except Exception:
+        log.exception("Unexpected error testing Prowlarr connection")
+        return jsonify({"ok": False, "message": "Unexpected error — check server logs"})
 
 
 @bp.route("/api/test-apprise", methods=["POST"])
