@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A single-file Flask web app that periodically searches Prowlarr for new results and sends notifications via Apprise. SQLite for persistence, HTMX for interactivity, gunicorn for production serving.
+A Flask web app that periodically searches Prowlarr for new results and sends notifications via Apprise. SQLite for persistence, HTMX for interactivity, gunicorn for production serving.
 
 ## Commands
 
@@ -28,15 +28,24 @@ docker compose up -d
 
 ## Architecture
 
-Everything lives in `app.py` (~700 lines). No packages, no blueprints.
+**Modules:**
+
+- **`app.py`** — Flask app creation, Blueprint registration, startup (init_db, work_queue, scheduler). Entry point for gunicorn (`app:app`) and `python app.py`.
+- **`db.py`** — SQLite setup, `get_db()`, `init_db()`, `get_setting()`/`set_setting()`, `_db_lock`.
+- **`prowlarr.py`** — Prowlarr API search (`prowlarr_search_raw`), `hash_result()`, `format_size()`.
+- **`worker.py`** — `Priority`, `Job`, `WorkQueue` class, `work_queue` singleton.
+- **`scheduler.py`** — `Scheduler` class, `scheduler` singleton.
+- **`callbacks.py`** — `process_query_result()`, `process_seed_result()`, `_insert_result()`.
+- **`notifications.py`** — `notify_new_results()`, `notify_error()` via Apprise.
+- **`routes.py`** — Flask Blueprint (`bp`) with all HTTP routes and template filters.
 
 **Key subsystems:**
 
-- **`WorkQueue`** — single worker thread draining a `PriorityQueue`. All Prowlarr searches go through `work_queue.submit()` which returns a `Job` immediately (non-blocking). The worker executes one search at a time with a configurable min gap (`min_query_interval` setting). Jobs have `Priority.HIGH` (interactive: preview, seed, run-now) or `Priority.LOW` (scheduled). Completed jobs are stored in memory with a 5-minute TTL for polling. Each job can have a `callback` invoked by the worker after the search.
-- **`Scheduler`** — daemon thread, wakes every 30s (or when poked). Iterates enabled queries, submits due ones to the work queue. Advances `next_run` immediately on enqueue to prevent double-submission.
-- **Result callbacks** — `_process_query_result()` (for scheduled/run-now: diffs results, stores new ones, sends notifications) and `_process_seed_result()` (for new query seeding: inserts all results as not-new). Both run on the worker thread.
-- **Settings** — key/value pairs in `settings` table. `get_setting()`/`set_setting()` hit SQLite directly (no caching).
-- **`_db_lock`** — global `threading.Lock` for serializing DB writes. Reads don't acquire it.
+- **`WorkQueue`** (`worker.py`) — single worker thread draining a `PriorityQueue`. All Prowlarr searches go through `work_queue.submit()` which returns a `Job` immediately (non-blocking). The worker executes one search at a time with a configurable min gap (`min_query_interval` setting). Jobs have `Priority.HIGH` (interactive: preview, seed, run-now) or `Priority.LOW` (scheduled). Completed jobs are stored in memory with a 5-minute TTL for polling. Each job can have a `callback` invoked by the worker after the search.
+- **`Scheduler`** (`scheduler.py`) — daemon thread, wakes every 30s (or when poked). Iterates enabled queries, submits due ones to the work queue. Advances `next_run` immediately on enqueue to prevent double-submission.
+- **Result callbacks** (`callbacks.py`) — `process_query_result()` (for scheduled/run-now: diffs results, stores new ones, sends notifications) and `process_seed_result()` (for new query seeding: inserts all results as not-new). Both run on the worker thread.
+- **Settings** (`db.py`) — key/value pairs in `settings` table. `get_setting()`/`set_setting()` hit SQLite directly (no caching).
+- **`_db_lock`** (`db.py`) — global `threading.Lock` for serializing DB writes. Reads don't acquire it.
 
 **Threading model (gunicorn: 1 worker, 4 threads):**
 - Flask request threads (up to 4) — serve HTTP only, never block on Prowlarr
