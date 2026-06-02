@@ -35,18 +35,23 @@ class Scheduler:
         self._wakeup.set()
 
     def _loop(self):
+        startup = True
         while not self._stop.is_set():
             self._wakeup.clear()
-            self._tick()
+            self._tick(startup=startup)
+            startup = False
             self._wakeup.wait(timeout=30)
 
-    def _tick(self):
+    def _tick(self, startup: bool = False):
         now_ts = time.time()
 
         with get_db() as conn:
             rows = conn.execute(
                 "SELECT id, query, cron, next_run, enabled FROM queries WHERE enabled=1"
             ).fetchall()
+
+        if startup:
+            log.info("Checking for overdue queries at startup (%d enabled)", len(rows))
 
         for row in rows:
             qid = row["id"]
@@ -61,6 +66,10 @@ class Scheduler:
 
             next_run_ts = datetime.fromisoformat(next_run_iso).timestamp()
             if now_ts >= next_run_ts:
+                if startup:
+                    log.info(
+                        "  Overdue: query %d %r due %s — queuing", qid, row["query"], next_run_iso
+                    )
                 next_iso = self.compute_next(cron_expr)
                 with _db_lock, get_db() as conn:
                     conn.execute("UPDATE queries SET next_run=? WHERE id=?", (next_iso, qid))
