@@ -20,11 +20,20 @@
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Status</div>
     <span class="dot {% if q.enabled %}dot-green{% else %}dot-muted{% endif %}" style="margin-right:6px"></span>
     {% if q.enabled %}Active{% else %}Paused{% endif %}
+    <span class="query-status-badge" id="qstatus-{{ q.id }}" style="margin-left:8px"
+      {% if q.last_error %}data-error="1"{% endif %}
+    >{% if q.last_error %}<span class="status-badge status-error">ERROR</span>{% endif %}</span>
   </div>
   <div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Last run</div>
     {{ q.last_run|timeago }}
   </div>
+  {% if q.last_error %}
+  <div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Last error</div>
+    <span style="color:var(--red);font-size:12px;font-family:var(--mono)">{{ q.last_error }}</span>
+  </div>
+  {% endif %}
   <div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Next run</div>
     {{ q.next_run|timeago if q.next_run and q.enabled else '—' }}
@@ -141,5 +150,7 @@ function updateQueryCronDesc() {
 }
 updateQueryCronDesc();
 queryCronInput.addEventListener('input', updateQueryCronDesc);
+
+pollQueueStatus({{ q.id | tojson }});
 </script>
 {% endblock %}

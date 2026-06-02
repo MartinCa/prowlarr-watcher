@@ -21,6 +21,9 @@
           <span class="dot {% if q.enabled %}dot-green{% else %}dot-muted{% endif %}"></span>
           {% if q.enabled %}active{% else %}paused{% endif %}
         </span>
+        <span class="tag query-status-badge" id="qstatus-{{ q.id }}"
+          {% if q.last_error %}data-error="1"{% endif %}
+        >{% if q.last_error %}<span class="status-badge status-error">ERROR</span>{% endif %}</span>
         <span class="tag">
           <span style="color:var(--muted)">query:</span>&nbsp;
           <span style="color:var(--text);font-family:var(--mono)">{{ q.query }}</span>
@@ -89,8 +92,7 @@
             hx-post="/api/search-preview"
             hx-trigger="click"
             hx-target="#previewBox"
-            hx-include="#queryInput"
-            hx-indicator="#previewSpinner">Preview</button>
+            hx-include="#queryInput">Preview</button>
         </div>
         <div class="hint">
           Tip: results are seeded on first add — you'll only be notified about <em>new</em> results after that.
@@ -98,10 +100,7 @@
       </div>
 
       <div class="form-group">
-        <label>
-          Preview
-          <span id="previewSpinner" class="htmx-indicator" style="color:var(--muted);font-size:11px;margin-left:8px">searching…</span>
-        </label>
+        <label>Preview</label>
         <div class="preview-box" id="previewBox">
           <span class="preview-empty">Type a query above to preview results from Prowlarr.</span>
         </div>
@@ -148,5 +147,7 @@ document.getElementById('cronInput').addEventListener('input', function () {
   document.getElementById('cronGuruLink').href = 'https://crontab.guru/#' + expr.replace(/ /g, '_');
   document.getElementById('cronInputDesc').textContent = cronDesc(expr);
 });
+
+pollQueueStatus();
 </script>
 {% endblock %}
