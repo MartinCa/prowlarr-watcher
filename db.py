@@ -69,6 +69,7 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('apprise_urls', '')")
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('min_query_interval', '10')")
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('max_retries', '5')")
+        conn.execute("INSERT OR IGNORE INTO settings VALUES ('prowlarr_timeout', '200')")
         conn.commit()
         # Migrations for existing databases
         cols = {r[1] for r in conn.execute("PRAGMA table_info(queries)").fetchall()}

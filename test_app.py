@@ -198,6 +198,7 @@ class TestDatabase:
         assert db.get_setting("prowlarr_api_key") == ""
         assert db.get_setting("default_cron") == "0 * * * *"
         assert db.get_setting("min_query_interval") == "10"
+        assert db.get_setting("prowlarr_timeout") == "200"
 
     def test_get_setting_default(self):
         assert db.get_setting("nonexistent", "fallback") == "fallback"
@@ -791,6 +792,7 @@ class TestSettingsPage:
                 "prowlarr_api_key": "newkey",
                 "default_cron": "*/10 * * * *",
                 "min_query_interval": "5",
+                "prowlarr_timeout": "30",
                 "apprise_urls": "json://localhost",
             },
             follow_redirects=True,
@@ -800,6 +802,7 @@ class TestSettingsPage:
         assert db.get_setting("prowlarr_api_key") == "newkey"
         assert db.get_setting("default_cron") == "*/10 * * * *"
         assert db.get_setting("min_query_interval") == "5"
+        assert db.get_setting("prowlarr_timeout") == "30"
         assert db.get_setting("apprise_urls") == "json://localhost"
 
     def test_saved_flash(self, client):
