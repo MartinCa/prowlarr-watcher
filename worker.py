@@ -129,24 +129,24 @@ class WorkQueue:
                 job.result = prowlarr_search_raw(job.query, job.categories)
                 job.status = "done"
             except Exception as exc:
-                job.error = str(exc)
+                job.error = f"{type(exc).__name__}: {exc}"
                 max_ret = self._max_retries()
                 if job.attempt < max_ret:
                     log.warning(
-                        "Search failed for %r (attempt %d/%d), retrying: %s",
+                        "Search failed for %r (attempt %d/%d), retrying",
                         job.label,
                         job.attempt,
                         max_ret,
-                        exc,
+                        exc_info=True,
                     )
                     job.status = "retrying"
                 else:
                     job.status = "error"
                     log.error(
-                        "Search failed for %r after %d attempts: %s",
+                        "Search failed for %r after %d attempts",
                         job.label,
                         max_ret,
-                        exc,
+                        exc_info=True,
                     )
             finally:
                 last_request = time.monotonic()
