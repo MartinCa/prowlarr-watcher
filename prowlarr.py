@@ -24,7 +24,7 @@ def prowlarr_search_raw(query: str, categories: list[int] | None = None) -> list
         f"{base}/api/v1/search",
         headers={"X-Api-Key": api_key},
         params=params,
-        timeout=30,
+        timeout=200,
     )
     resp.raise_for_status()
     results = resp.json()
