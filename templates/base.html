@@ -254,8 +254,8 @@
 <body>
   <nav>
     <span class="nav-brand">PROWLARR<span>/</span>WATCHER</span>
-    <a href="/" class="{% if request.endpoint == 'index' %}active{% endif %}">Queries</a>
-    <a href="/settings" class="{% if request.endpoint == 'settings' %}active{% endif %}">Settings</a>
+    <a href="/" class="{% if request.endpoint == 'main.index' %}active{% endif %}">Queries</a>
+    <a href="/settings" class="{% if request.endpoint == 'main.settings' %}active{% endif %}">Settings</a>
   </nav>
   <div class="container">
     {% block content %}{% endblock %}
