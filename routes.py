@@ -131,12 +131,12 @@ def job_preview(job_id: str):
 
 @bp.route("/api/query", methods=["POST"])
 def add_query():
-    name = request.form.get("name", "").strip()
     query_text = request.form.get("query", "").strip()
+    name = request.form.get("name", "").strip() or query_text
     cron = request.form.get("cron", "").strip() or None
 
-    if not name or not query_text:
-        return "Name and query are required", 400
+    if not query_text:
+        return "Query is required", 400
 
     now_iso = datetime.now(timezone.utc).isoformat()
     cron_expr = cron or get_setting("default_cron", "0 * * * *")
