@@ -77,16 +77,12 @@
     <div class="modal-title">// New Query</div>
     <form method="POST" action="/api/query" id="addForm">
       <div class="form-group">
-        <label>Name</label>
-        <input type="text" name="name" id="queryName" placeholder="e.g. Ubuntu ISOs" required autofocus>
-      </div>
-
-      <div class="form-group">
         <label>Search Query</label>
         <div style="display:flex;gap:8px">
           <input type="text" name="query" id="queryInput"
             placeholder="e.g. ubuntu 24.04"
             required
+            autofocus
             style="flex:1">
           <button type="button" class="btn btn-ghost"
             hx-post="/api/search-preview"
@@ -95,8 +91,15 @@
             hx-include="#queryInput">Preview</button>
         </div>
         <div class="hint">
+          Also used as the display name.
+          <a href="#" id="customNameToggle" onclick="document.getElementById('customNameGroup').style.display='block';this.style.display='none';return false">Set a different name?</a>
           Tip: results are seeded on first add — you'll only be notified about <em>new</em> results after that.
         </div>
+      </div>
+
+      <div class="form-group" id="customNameGroup" style="display:none">
+        <label>Display Name <span style="font-weight:300">(optional)</span></label>
+        <input type="text" name="name" id="queryName" placeholder="e.g. Ubuntu ISOs">
       </div>
 
       <div class="form-group">
@@ -126,7 +129,11 @@
 <script>
 function openModal() {
   document.getElementById('modal').classList.add('open');
-  document.getElementById('queryName').focus();
+  document.getElementById('addForm').reset();
+  document.getElementById('customNameGroup').style.display = 'none';
+  document.getElementById('customNameToggle').style.display = '';
+  document.getElementById('previewBox').innerHTML = '<span class="preview-empty">Type a query above to preview results from Prowlarr.</span>';
+  document.getElementById('queryInput').focus();
 }
 function closeModal() {
   document.getElementById('modal').classList.remove('open');
