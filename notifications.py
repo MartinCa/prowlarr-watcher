@@ -6,7 +6,7 @@ from urllib.parse import quote
 import apprise
 
 from db import get_db, get_setting
-from prowlarr import format_size
+from prowlarr import format_size, prowlarr_link_base
 
 log = logging.getLogger("prowlarr-watcher")
 
@@ -27,7 +27,7 @@ def notify_new_results(name: str, query: str, new_items: list[dict]):
     if count > 20:
         lines.append(f"  … and {count - 20} more")
     body = "\n".join(lines)
-    prowlarr_base = get_setting("prowlarr_url", "").rstrip("/")
+    prowlarr_base = prowlarr_link_base()
     if prowlarr_base:
         body = f"🔍 {prowlarr_base}/search?query={quote(query)}\n\n{body}"
 

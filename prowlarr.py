@@ -10,6 +10,12 @@ from db import get_setting
 log = logging.getLogger("prowlarr-watcher")
 
 
+def prowlarr_link_base() -> str:
+    """Return the base URL to use for browser links (external URL if configured, else API URL)."""
+    external = get_setting("prowlarr_external_url", "").rstrip("/")
+    return external or get_setting("prowlarr_url", "").rstrip("/")
+
+
 def prowlarr_search_raw(query: str, categories: list[int] | None = None) -> list[dict]:
     base = get_setting("prowlarr_url").rstrip("/")
     api_key = get_setting("prowlarr_api_key")
