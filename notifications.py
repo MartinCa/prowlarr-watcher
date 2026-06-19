@@ -1,6 +1,7 @@
 """Apprise notification helpers."""
 
 import logging
+from urllib.parse import quote
 
 import apprise
 
@@ -25,6 +26,9 @@ def notify_new_results(name: str, query: str, new_items: list[dict]):
         lines.append(f"• {r.get('title', '?')}  [{r.get('indexer', '?')}] [{size_str}]")
     if count > 20:
         lines.append(f"  … and {count - 20} more")
+    prowlarr_base = get_setting("prowlarr_url", "").rstrip("/")
+    if prowlarr_base:
+        lines.append(f"\n🔍 {prowlarr_base}/search?query={quote(query)}")
     body = "\n".join(lines)
 
     ap = apprise.Apprise()

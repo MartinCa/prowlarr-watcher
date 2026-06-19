@@ -70,12 +70,14 @@ def query_detail(qid: int):
             "SELECT * FROM results WHERE query_id=? ORDER BY first_seen DESC", (qid,)
         ).fetchall()
     default_cron = get_setting("default_cron", "0 * * * *")
+    prowlarr_url = get_setting("prowlarr_url", "").rstrip("/")
     return render_template(
         "query_detail.html",
         q=q,
         results=results,
         default_cron=default_cron,
         format_size=format_size,
+        prowlarr_url=prowlarr_url,
     )
 
 
