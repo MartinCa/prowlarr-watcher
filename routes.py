@@ -11,7 +11,7 @@ from markupsafe import escape
 
 from callbacks import process_query_result, process_seed_result
 from db import _db_lock, get_db, get_setting, set_setting
-from prowlarr import format_size
+from prowlarr import format_size, prowlarr_link_base
 from scheduler import Scheduler, scheduler
 from worker import Priority, work_queue
 
@@ -36,6 +36,7 @@ def settings():
     if request.method == "POST":
         set_setting("prowlarr_url", request.form.get("prowlarr_url", "").strip())
         set_setting("prowlarr_api_key", request.form.get("prowlarr_api_key", "").strip())
+        set_setting("prowlarr_external_url", request.form.get("prowlarr_external_url", "").strip())
         set_setting("default_cron", request.form.get("default_cron", "0 * * * *").strip())
         set_setting(
             "min_query_interval",
@@ -51,6 +52,7 @@ def settings():
         "settings.html",
         prowlarr_url=get_setting("prowlarr_url"),
         prowlarr_api_key=get_setting("prowlarr_api_key"),
+        prowlarr_external_url=get_setting("prowlarr_external_url", ""),
         default_cron=get_setting("default_cron"),
         min_query_interval=get_setting("min_query_interval", "10"),
         max_retries=get_setting("max_retries", "5"),
@@ -76,6 +78,7 @@ def query_detail(qid: int):
         results=results,
         default_cron=default_cron,
         format_size=format_size,
+        prowlarr_url=prowlarr_link_base(),
     )
 
 
