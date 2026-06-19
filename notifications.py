@@ -26,10 +26,10 @@ def notify_new_results(name: str, query: str, new_items: list[dict]):
         lines.append(f"• {r.get('title', '?')}  [{r.get('indexer', '?')}] [{size_str}]")
     if count > 20:
         lines.append(f"  … and {count - 20} more")
+    body = "\n".join(lines)
     prowlarr_base = get_setting("prowlarr_url", "").rstrip("/")
     if prowlarr_base:
-        lines.append(f"\n🔍 {prowlarr_base}/search?query={quote(query)}")
-    body = "\n".join(lines)
+        body = f"🔍 {prowlarr_base}/search?query={quote(query)}\n\n{body}"
 
     ap = apprise.Apprise()
     for u in urls:
