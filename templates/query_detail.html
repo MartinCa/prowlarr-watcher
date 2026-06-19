@@ -15,6 +15,11 @@
   <div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Search query</div>
     <code style="font-size:14px;color:var(--accent)">{{ q.query }}</code>
+    {% if prowlarr_url %}
+    <a href="{{ prowlarr_url }}/search?query={{ q.query | urlencode }}" target="_blank" rel="noopener"
+       style="margin-left:10px;font-size:11px;color:var(--muted);text-decoration:none;vertical-align:middle"
+       title="Search in Prowlarr">↗ Prowlarr</a>
+    {% endif %}
   </div>
   <div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Status</div>
