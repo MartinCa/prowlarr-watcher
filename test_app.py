@@ -40,6 +40,14 @@ def _fresh_db(tmp_path, monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _reset_indexer_cache():
+    """Prowlarr's indexer list is cached at module scope — keep tests isolated."""
+    prowlarr._indexer_cache["time"] = 0.0
+    prowlarr._indexer_cache["indexers"] = []
+    yield
+
+
 @pytest.fixture()
 def client():
     app_mod.app.config["TESTING"] = True
@@ -199,6 +207,12 @@ class TestDatabase:
         assert db.get_setting("default_cron") == "0 * * * *"
         assert db.get_setting("min_query_interval") == "10"
         assert db.get_setting("prowlarr_timeout") == "200"
+        assert db.get_setting("default_excluded_indexers") == ""
+
+    def test_migration_adds_excluded_indexers_column(self):
+        with db.get_db() as conn:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(queries)").fetchall()}
+        assert "excluded_indexers" in cols
 
     def test_get_setting_default(self):
         assert db.get_setting("nonexistent", "fallback") == "fallback"
@@ -284,6 +298,115 @@ class TestProwlarrSearchRaw:
         with pytest.raises(Exception, match="HTTP 500"):
             prowlarr.prowlarr_search_raw("test")
 
+    @patch("prowlarr.list_indexers")
+    @patch("prowlarr.requests.get")
+    def test_search_with_excluded_indexers(self, mock_get, mock_list_indexers):
+        _configure_prowlarr()
+        mock_list_indexers.return_value = [
+            {"id": 1, "name": "A", "enable": True},
+            {"id": 2, "name": "B", "enable": True},
+            {"id": 3, "name": "C", "enable": True},
+        ]
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = []
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+
+        prowlarr.prowlarr_search_raw("test", excluded_indexer_ids=[2])
+
+        params = mock_get.call_args.kwargs.get("params", mock_get.call_args[1].get("params", {}))
+        assert params["indexerIds"] == [1, 3]
+
+    @patch("prowlarr.requests.get")
+    def test_search_without_exclusions_skips_indexer_lookup(self, mock_get):
+        _configure_prowlarr()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = []
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+
+        prowlarr.prowlarr_search_raw("test", excluded_indexer_ids=None)
+
+        params = mock_get.call_args.kwargs.get("params", mock_get.call_args[1].get("params", {}))
+        assert "indexerIds" not in params
+        mock_get.assert_called_once()  # only the search call, no indexer lookup
+
+
+class TestListIndexers:
+    def test_raises_without_config(self):
+        db.set_setting("prowlarr_api_key", "")
+        with pytest.raises(ValueError, match="configured in Settings"):
+            prowlarr.list_indexers()
+
+    @patch("prowlarr.requests.get")
+    def test_fetches_and_normalizes(self, mock_get):
+        _configure_prowlarr()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = [
+            {"id": 1, "name": "A", "enable": True, "extra": "ignored"},
+            {"id": 2, "name": "B", "enable": False},
+        ]
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+
+        indexers = prowlarr.list_indexers()
+
+        assert indexers == [
+            {"id": 1, "name": "A", "enable": True},
+            {"id": 2, "name": "B", "enable": False},
+        ]
+        mock_get.assert_called_once()
+        assert "/api/v1/indexer" in mock_get.call_args[0][0]
+
+    @patch("prowlarr.requests.get")
+    def test_caches_between_calls(self, mock_get):
+        _configure_prowlarr()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = [{"id": 1, "name": "A", "enable": True}]
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+
+        prowlarr.list_indexers()
+        prowlarr.list_indexers()
+
+        mock_get.assert_called_once()
+
+    @patch("prowlarr.requests.get")
+    def test_force_bypasses_cache(self, mock_get):
+        _configure_prowlarr()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = [{"id": 1, "name": "A", "enable": True}]
+        mock_resp.raise_for_status = MagicMock()
+        mock_get.return_value = mock_resp
+
+        prowlarr.list_indexers()
+        prowlarr.list_indexers(force=True)
+
+        assert mock_get.call_count == 2
+
+
+class TestIndexerExclusionHelpers:
+    def test_parse_indexer_ids(self):
+        assert prowlarr.parse_indexer_ids("1,2,3") == [1, 2, 3]
+        assert prowlarr.parse_indexer_ids("") == []
+        assert prowlarr.parse_indexer_ids("5") == [5]
+
+    def test_format_indexer_ids(self):
+        assert prowlarr.format_indexer_ids([1, 2, 3]) == "1,2,3"
+        assert prowlarr.format_indexer_ids([]) == ""
+
+    def test_effective_excluded_indexers_inherits_default_when_none(self):
+        db.set_setting("default_excluded_indexers", "4,5")
+        assert prowlarr.effective_excluded_indexers(None) == [4, 5]
+
+    def test_effective_excluded_indexers_uses_override(self):
+        db.set_setting("default_excluded_indexers", "4,5")
+        assert prowlarr.effective_excluded_indexers("6,7") == [6, 7]
+
+    def test_effective_excluded_indexers_empty_override_means_none_excluded(self):
+        db.set_setting("default_excluded_indexers", "4,5")
+        assert prowlarr.effective_excluded_indexers("") == []
+
 
 # ===========================================================================
 # Job and WorkQueue tests
@@ -361,7 +484,7 @@ class TestWorkQueue:
 
         assert job.status == "done"
         assert job.result == [{"title": "result1", "guid": "g1"}]
-        mock_search.assert_called_once_with("ubuntu", None)
+        mock_search.assert_called_once_with("ubuntu", None, None)
 
     @patch("worker.prowlarr_search_raw")
     def test_worker_handles_search_error(self, mock_search):
@@ -460,7 +583,7 @@ class TestWorkQueue:
     def test_priority_ordering(self, mock_search):
         _configure_prowlarr()
         call_order = []
-        mock_search.side_effect = lambda q, c=None: (call_order.append(q), [])[1]
+        mock_search.side_effect = lambda q, c=None, e=None: (call_order.append(q), [])[1]
 
         wq = self._make_queue()
         wq._min_gap = lambda: 0.0
@@ -819,6 +942,34 @@ class TestSettingsPage:
         )
         assert b"Settings saved" in resp.data
 
+    def test_post_saves_excluded_indexers(self, client):
+        client.post(
+            "/settings",
+            data={
+                "prowlarr_url": "http://x",
+                "prowlarr_api_key": "k",
+                "default_cron": "0 * * * *",
+                "min_query_interval": "10",
+                "apprise_urls": "",
+                "excluded_indexers": ["1", "3"],
+            },
+        )
+        assert db.get_setting("default_excluded_indexers") == "1,3"
+
+    def test_post_without_indexers_clears_exclusions(self, client):
+        db.set_setting("default_excluded_indexers", "1,2")
+        client.post(
+            "/settings",
+            data={
+                "prowlarr_url": "http://x",
+                "prowlarr_api_key": "k",
+                "default_cron": "0 * * * *",
+                "min_query_interval": "10",
+                "apprise_urls": "",
+            },
+        )
+        assert db.get_setting("default_excluded_indexers") == ""
+
 
 class TestQueryDetailPage:
     def test_get_existing(self, client):
@@ -832,6 +983,22 @@ class TestQueryDetailPage:
     def test_get_nonexistent(self, client):
         resp = client.get("/query/9999")
         assert resp.status_code == 404
+
+    def test_get_shows_default_and_override_state(self, client):
+        db.set_setting("default_excluded_indexers", "1,2")
+        qid = _insert_query(name="Indexer Test")
+        resp = client.get(f"/query/{qid}")
+        assert resp.status_code == 200
+        assert b"const defaultExcludedIndexers = [1, 2]" in resp.data
+        assert b"const queryExcludedIndexers = null" in resp.data
+
+    def test_get_shows_query_override(self, client):
+        qid = _insert_query(name="Indexer Override Test")
+        with db._db_lock, db.get_db() as conn:
+            conn.execute("UPDATE queries SET excluded_indexers=? WHERE id=?", ("7", qid))
+            conn.commit()
+        resp = client.get(f"/query/{qid}")
+        assert b"const queryExcludedIndexers = [7]" in resp.data
 
 
 # ===========================================================================

@@ -2,12 +2,16 @@
 
 import hashlib
 import logging
+import time
 
 import requests
 
 from db import get_setting
 
 log = logging.getLogger("prowlarr-watcher")
+
+_INDEXER_CACHE_TTL = 120.0
+_indexer_cache: dict = {"time": 0.0, "indexers": []}
 
 
 def prowlarr_link_base() -> str:
@@ -16,7 +20,51 @@ def prowlarr_link_base() -> str:
     return external or get_setting("prowlarr_url", "").rstrip("/")
 
 
-def prowlarr_search_raw(query: str, categories: list[int] | None = None) -> list[dict]:
+def list_indexers(force: bool = False) -> list[dict]:
+    """Return configured Prowlarr indexers as [{id, name, enable}, ...], cached briefly."""
+    now = time.monotonic()
+    if not force and (now - _indexer_cache["time"]) < _INDEXER_CACHE_TTL:
+        return _indexer_cache["indexers"]
+
+    base = get_setting("prowlarr_url").rstrip("/")
+    api_key = get_setting("prowlarr_api_key")
+    if not base or not api_key:
+        raise ValueError("Prowlarr URL and API key must be configured in Settings")
+
+    timeout = int(get_setting("prowlarr_timeout", "200"))
+    resp = requests.get(
+        f"{base}/api/v1/indexer",
+        headers={"X-Api-Key": api_key},
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    indexers = [
+        {"id": i["id"], "name": i["name"], "enable": i.get("enable", True)} for i in resp.json()
+    ]
+    _indexer_cache["time"] = now
+    _indexer_cache["indexers"] = indexers
+    return indexers
+
+
+def parse_indexer_ids(raw: str) -> list[int]:
+    return [int(x) for x in raw.split(",") if x.strip()]
+
+
+def format_indexer_ids(ids: list[int]) -> str:
+    return ",".join(str(i) for i in ids)
+
+
+def effective_excluded_indexers(override: str | None) -> list[int]:
+    """Resolve a query's excluded-indexer override (None = inherit the default list)."""
+    raw = override if override is not None else get_setting("default_excluded_indexers", "")
+    return parse_indexer_ids(raw)
+
+
+def prowlarr_search_raw(
+    query: str,
+    categories: list[int] | None = None,
+    excluded_indexer_ids: list[int] | None = None,
+) -> list[dict]:
     base = get_setting("prowlarr_url").rstrip("/")
     api_key = get_setting("prowlarr_api_key")
     if not base or not api_key:
@@ -25,6 +73,9 @@ def prowlarr_search_raw(query: str, categories: list[int] | None = None) -> list
     params: dict = {"query": query}
     if categories:
         params["categories"] = categories
+    if excluded_indexer_ids:
+        excluded = set(excluded_indexer_ids)
+        params["indexerIds"] = [i["id"] for i in list_indexers() if i["id"] not in excluded]
 
     timeout = int(get_setting("prowlarr_timeout", "200"))
     resp = requests.get(
