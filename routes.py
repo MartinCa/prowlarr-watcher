@@ -278,8 +278,10 @@ def api_indexers():
     """Return the configured Prowlarr indexers, for populating exclusion checklists."""
     try:
         return jsonify({"ok": True, "indexers": list_indexers()})
-    except ValueError as exc:
-        return jsonify({"ok": False, "message": str(exc)})
+    except ValueError:
+        return jsonify(
+            {"ok": False, "message": "Prowlarr URL and API key must be configured in Settings"}
+        )
     except requests.exceptions.RequestException:
         log.exception("Failed to fetch indexers from Prowlarr")
         return jsonify({"ok": False, "message": "Could not reach Prowlarr — check Settings"})
