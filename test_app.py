@@ -43,7 +43,7 @@ def _fresh_db(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _reset_indexer_cache():
     """Prowlarr's indexer list is cached at module scope — keep tests isolated."""
-    prowlarr._indexer_cache["time"] = 0.0
+    prowlarr._indexer_cache["time"] = None
     prowlarr._indexer_cache["indexers"] = []
     yield
 

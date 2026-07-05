@@ -11,7 +11,7 @@ from db import get_setting
 log = logging.getLogger("prowlarr-watcher")
 
 _INDEXER_CACHE_TTL = 120.0
-_indexer_cache: dict = {"time": 0.0, "indexers": []}
+_indexer_cache: dict = {"time": None, "indexers": []}
 
 
 def prowlarr_link_base() -> str:
@@ -23,7 +23,8 @@ def prowlarr_link_base() -> str:
 def list_indexers(force: bool = False) -> list[dict]:
     """Return configured Prowlarr indexers as [{id, name, enable}, ...], cached briefly."""
     now = time.monotonic()
-    if not force and (now - _indexer_cache["time"]) < _INDEXER_CACHE_TTL:
+    cached_at = _indexer_cache["time"]
+    if not force and cached_at is not None and (now - cached_at) < _INDEXER_CACHE_TTL:
         return _indexer_cache["indexers"]
 
     base = get_setting("prowlarr_url").rstrip("/")

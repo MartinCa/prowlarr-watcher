@@ -61,3 +61,15 @@ docker compose up -d
 `pyproject.toml`: line-length 100, target Python 3.14, lint rules E/F/W/I.
 
 **Caveat:** ruff with `target-version = "py314"` incorrectly reformats `except (ExcA, ExcB):` to `except ExcA, ExcB:` (Python 2 syntax). Use `except Exception:` as a workaround when catching multiple exception types.
+
+## Before finishing any change
+
+Always run all three before considering a change complete — CI enforces all of them on PRs to main, and catching failures locally is faster than waiting on CI:
+
+```bash
+ruff check .
+ruff format --check .
+pytest test_app.py -v
+```
+
+Fix any failures (or run `ruff format .` to auto-fix formatting) before committing.
