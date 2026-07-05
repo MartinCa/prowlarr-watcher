@@ -32,16 +32,17 @@ def init_db():
             );
 
             CREATE TABLE IF NOT EXISTS queries (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                name        TEXT NOT NULL,
-                query       TEXT NOT NULL,
-                cron        TEXT,
-                enabled     INTEGER NOT NULL DEFAULT 1,
-                created_at  TEXT NOT NULL,
-                last_run    TEXT,
-                next_run    TEXT,
-                last_count  INTEGER DEFAULT 0,
-                last_error  TEXT
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                name               TEXT NOT NULL,
+                query              TEXT NOT NULL,
+                cron               TEXT,
+                enabled            INTEGER NOT NULL DEFAULT 1,
+                created_at         TEXT NOT NULL,
+                last_run           TEXT,
+                next_run           TEXT,
+                last_count         INTEGER DEFAULT 0,
+                last_error         TEXT,
+                excluded_indexers  TEXT
             );
 
             CREATE TABLE IF NOT EXISTS results (
@@ -70,11 +71,15 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('min_query_interval', '10')")
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('max_retries', '5')")
         conn.execute("INSERT OR IGNORE INTO settings VALUES ('prowlarr_timeout', '200')")
+        conn.execute("INSERT OR IGNORE INTO settings VALUES ('default_excluded_indexers', '')")
         conn.commit()
         # Migrations for existing databases
         cols = {r[1] for r in conn.execute("PRAGMA table_info(queries)").fetchall()}
         if "last_error" not in cols:
             conn.execute("ALTER TABLE queries ADD COLUMN last_error TEXT")
+            conn.commit()
+        if "excluded_indexers" not in cols:
+            conn.execute("ALTER TABLE queries ADD COLUMN excluded_indexers TEXT")
             conn.commit()
 
 

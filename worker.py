@@ -25,6 +25,7 @@ class Job:
     job_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     query: str = ""
     categories: list[int] | None = None
+    excluded_indexers: list[int] | None = None
     label: str = "unknown"
     priority: Priority = Priority.LOW
     callback: Callable[["Job"], None] | None = None
@@ -73,6 +74,7 @@ class WorkQueue:
         self,
         query: str,
         categories: list[int] | None = None,
+        excluded_indexers: list[int] | None = None,
         label: str = "unknown",
         priority: Priority = Priority.LOW,
         callback: Callable[[Job], None] | None = None,
@@ -88,6 +90,7 @@ class WorkQueue:
             job = Job(
                 query=query,
                 categories=categories,
+                excluded_indexers=excluded_indexers,
                 label=label,
                 priority=priority,
                 callback=callback,
@@ -126,7 +129,7 @@ class WorkQueue:
                 time.sleep(wait)
 
             try:
-                job.result = prowlarr_search_raw(job.query, job.categories)
+                job.result = prowlarr_search_raw(job.query, job.categories, job.excluded_indexers)
                 job.status = "done"
             except Exception as exc:
                 job.error = f"{type(exc).__name__}: {exc}"
@@ -159,6 +162,7 @@ class WorkQueue:
                 self.submit(
                     query=job.query,
                     categories=job.categories,
+                    excluded_indexers=job.excluded_indexers,
                     label=job.label,
                     priority=job.priority,
                     callback=job.callback,

@@ -83,6 +83,27 @@
   <div class="hint" id="queryCronDesc" style="margin-top:8px;color:var(--text)"></div>
 </div>
 
+<!-- Indexer exclusions -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="section-header" style="margin-bottom:12px">
+    <span class="section-title">Indexers</span>
+  </div>
+  <form method="POST" action="/api/query/{{ q.id }}" id="indexerForm">
+    <input type="hidden" name="action" value="update_indexers">
+    <label style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;
+      color:var(--text);text-transform:none;letter-spacing:0;margin-bottom:10px">
+      <input type="checkbox" name="override" id="indexerOverride"
+        {% if query_excluded_indexers is not none %}checked{% endif %}>
+      Override the default exclusion list for this query
+    </label>
+    <div id="indexerList" style="font-family:var(--mono);font-size:12px;color:var(--muted)">
+      loading indexers…
+    </div>
+    <div class="hint" id="indexerHint" style="margin-top:8px"></div>
+    <button class="btn btn-sm" style="margin-top:12px">Save</button>
+  </form>
+</div>
+
 <!-- Results -->
 <div class="section-header">
   <span class="section-title">Results ({{ results|length }})</span>
@@ -157,5 +178,54 @@ updateQueryCronDesc();
 queryCronInput.addEventListener('input', updateQueryCronDesc);
 
 pollQueueStatus({{ q.id | tojson }});
+
+const defaultExcludedIndexers = {{ default_excluded_indexers | tojson }};
+const queryExcludedIndexers = {{ query_excluded_indexers | tojson }};
+const overrideCheckbox = document.getElementById('indexerOverride');
+const indexerListBox = document.getElementById('indexerList');
+let indexerData = [];
+
+async function loadIndexers() {
+  try {
+    const r = await fetch('/api/indexers');
+    const data = await r.json();
+    if (!data.ok) {
+      indexerListBox.textContent = data.message || 'Could not load indexers.';
+      indexerListBox.style.color = 'var(--red)';
+      return;
+    }
+    indexerData = data.indexers;
+    renderIndexerList();
+  } catch (e) {
+    indexerListBox.textContent = 'Could not load indexers.';
+    indexerListBox.style.color = 'var(--red)';
+  }
+}
+
+function renderIndexerList() {
+  if (!indexerData.length) {
+    indexerListBox.textContent = 'No indexers configured in Prowlarr.';
+    updateIndexerHint();
+    return;
+  }
+  const effective = queryExcludedIndexers !== null ? queryExcludedIndexers : defaultExcludedIndexers;
+  const disabled = overrideCheckbox.checked ? '' : 'disabled';
+  indexerListBox.innerHTML = indexerData.map(function (idx) {
+    const checked = effective.includes(idx.id) ? 'checked' : '';
+    return '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+      '<input type="checkbox" name="excluded_indexers" value="' + idx.id + '" ' + checked + ' ' + disabled + '> ' +
+      idx.name + '</label>';
+  }).join('');
+  updateIndexerHint();
+}
+
+function updateIndexerHint() {
+  document.getElementById('indexerHint').textContent = overrideCheckbox.checked
+    ? 'Only the checked indexers above are excluded for this query.'
+    : 'Using the default exclusion list from Settings.';
+}
+
+overrideCheckbox.addEventListener('change', renderIndexerList);
+loadIndexers();
 </script>
 {% endblock %}

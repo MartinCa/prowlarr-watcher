@@ -11,7 +11,14 @@ from markupsafe import escape
 
 from callbacks import process_query_result, process_seed_result
 from db import _db_lock, get_db, get_setting, set_setting
-from prowlarr import format_size, prowlarr_link_base
+from prowlarr import (
+    effective_excluded_indexers,
+    format_indexer_ids,
+    format_size,
+    list_indexers,
+    parse_indexer_ids,
+    prowlarr_link_base,
+)
 from scheduler import Scheduler, scheduler
 from worker import Priority, work_queue
 
@@ -45,6 +52,8 @@ def settings():
         set_setting("max_retries", request.form.get("max_retries", "5").strip())
         set_setting("prowlarr_timeout", request.form.get("prowlarr_timeout", "200").strip())
         set_setting("apprise_urls", request.form.get("apprise_urls", "").strip())
+        excluded_ids = [int(x) for x in request.form.getlist("excluded_indexers")]
+        set_setting("default_excluded_indexers", format_indexer_ids(excluded_ids))
         scheduler.poke()
         return redirect(url_for("main.settings") + "?saved=1")
 
@@ -58,6 +67,7 @@ def settings():
         max_retries=get_setting("max_retries", "5"),
         prowlarr_timeout=get_setting("prowlarr_timeout", "200"),
         apprise_urls=get_setting("apprise_urls"),
+        default_excluded_indexers=parse_indexer_ids(get_setting("default_excluded_indexers", "")),
         saved=request.args.get("saved"),
     )
 
@@ -79,6 +89,10 @@ def query_detail(qid: int):
         default_cron=default_cron,
         format_size=format_size,
         prowlarr_url=prowlarr_link_base(),
+        default_excluded_indexers=parse_indexer_ids(get_setting("default_excluded_indexers", "")),
+        query_excluded_indexers=(
+            None if q["excluded_indexers"] is None else parse_indexer_ids(q["excluded_indexers"])
+        ),
     )
 
 
@@ -92,7 +106,10 @@ def search_preview():
     if not query_text:
         return "<p class='preview-empty'>Enter a query above to preview results.</p>"
     job = work_queue.submit(
-        query_text, label=f"preview:{uuid.uuid4().hex[:8]}", priority=Priority.HIGH
+        query_text,
+        excluded_indexers=effective_excluded_indexers(None),
+        label=f"preview:{uuid.uuid4().hex[:8]}",
+        priority=Priority.HIGH,
     )
     safe_id = escape(job.job_id)
     return (
@@ -155,6 +172,7 @@ def add_query():
 
     work_queue.submit(
         query=query_text,
+        excluded_indexers=effective_excluded_indexers(None),
         label=f"seed:{qid}",
         priority=Priority.HIGH,
         callback=lambda job, _qid=qid, _q=query_text: process_seed_result(_qid, _q, job),
@@ -185,17 +203,31 @@ def update_query(qid: int):
 
     if action == "run_now":
         with get_db() as conn:
-            row = conn.execute("SELECT query, cron FROM queries WHERE id=?", (qid,)).fetchone()
+            row = conn.execute(
+                "SELECT query, cron, excluded_indexers FROM queries WHERE id=?", (qid,)
+            ).fetchone()
         if row:
             cron_expr = row["cron"] or get_setting("default_cron", "0 * * * *")
             work_queue.submit(
                 query=row["query"],
+                excluded_indexers=effective_excluded_indexers(row["excluded_indexers"]),
                 label=f"run:{qid}",
                 priority=Priority.HIGH,
                 callback=lambda job, _qid=qid, _cron=cron_expr: process_query_result(
                     _qid, _cron, job
                 ),
             )
+        return redirect(url_for("main.query_detail", qid=qid))
+
+    if action == "update_indexers":
+        if request.form.get("override"):
+            excluded_ids = [int(x) for x in request.form.getlist("excluded_indexers")]
+            value = format_indexer_ids(excluded_ids)
+        else:
+            value = None
+        with _db_lock, get_db() as conn:
+            conn.execute("UPDATE queries SET excluded_indexers=? WHERE id=?", (value, qid))
+            conn.commit()
         return redirect(url_for("main.query_detail", qid=qid))
 
     if action == "update_cron":
@@ -239,6 +271,20 @@ def queue_status():
     elif running.startswith("preview:"):
         preview_state = "running"
     return jsonify({"queries": query_states, "preview": preview_state})
+
+
+@bp.route("/api/indexers")
+def api_indexers():
+    """Return the configured Prowlarr indexers, for populating exclusion checklists."""
+    try:
+        return jsonify({"ok": True, "indexers": list_indexers()})
+    except ValueError:
+        return jsonify(
+            {"ok": False, "message": "Prowlarr URL and API key must be configured in Settings"}
+        )
+    except requests.exceptions.RequestException:
+        log.exception("Failed to fetch indexers from Prowlarr")
+        return jsonify({"ok": False, "message": "Could not reach Prowlarr — check Settings"})
 
 
 @bp.route("/api/test-prowlarr", methods=["POST"])

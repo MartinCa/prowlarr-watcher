@@ -9,6 +9,7 @@ from croniter import croniter
 
 from callbacks import process_query_result
 from db import _db_lock, get_db, get_setting
+from prowlarr import effective_excluded_indexers
 from worker import Priority, work_queue
 
 log = logging.getLogger("prowlarr-watcher")
@@ -47,7 +48,8 @@ class Scheduler:
 
         with get_db() as conn:
             rows = conn.execute(
-                "SELECT id, query, cron, next_run, enabled FROM queries WHERE enabled=1"
+                "SELECT id, query, cron, next_run, enabled, excluded_indexers"
+                " FROM queries WHERE enabled=1"
             ).fetchall()
 
         if startup:
@@ -77,6 +79,7 @@ class Scheduler:
 
                 work_queue.submit(
                     query=row["query"],
+                    excluded_indexers=effective_excluded_indexers(row["excluded_indexers"]),
                     label=f"q:{qid}",
                     priority=Priority.LOW,
                     callback=lambda job, _qid=qid, _cron=cron_expr: process_query_result(
