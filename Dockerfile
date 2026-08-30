@@ -5,8 +5,18 @@ WORKDIR /frontend
 RUN corepack enable
 
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/.npmrc ./
+# The GitHub Packages credential has to go in a *user-level* npmrc. pnpm 11
+# ignores an _authToken in a project .npmrc when its value is an environment
+# variable — the file is committed, so expanding secrets into it could leak
+# them to an attacker-controlled registry. It warns and carries on unauthed,
+# which surfaces much later as a 401 that reads like a missing token.
+# Written and removed inside this one RUN so it never lands in a layer.
 RUN --mount=type=secret,id=github_packages_token \
-    GITHUB_PACKAGES_TOKEN="$(cat /run/secrets/github_packages_token)" pnpm install --frozen-lockfile
+    export NPM_CONFIG_USERCONFIG=/tmp/npmrc && \
+    echo "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/github_packages_token)" \
+      > "$NPM_CONFIG_USERCONFIG" && \
+    pnpm install --frozen-lockfile; \
+    status=$?; rm -f "$NPM_CONFIG_USERCONFIG"; exit "$status"
 
 COPY frontend/ ./
 RUN pnpm build
