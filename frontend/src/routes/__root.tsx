@@ -1,5 +1,6 @@
 import { Link, Outlet, createRootRoute } from "@tanstack/react-router";
 import { Toaster } from "sonner";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Route = createRootRoute({ component: RootLayout });
 
@@ -25,6 +26,8 @@ function RootLayout() {
         >
           Settings
         </Link>
+        <div className="flex-1" />
+        <ThemeToggle />
       </nav>
       <main className="mx-auto max-w-4xl px-6 py-8">
         <Outlet />
