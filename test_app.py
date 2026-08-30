@@ -987,6 +987,16 @@ class TestCreateQuery:
         assert resp.status_code == 400
         assert resp.content_type == "application/problem+json"
 
+    def test_invalid_cron(self, client):
+        resp = post_json(client, "/api/queries", {"query": "fedora", "cron": "not a cron"})
+        assert resp.status_code == 400
+        assert resp.content_type == "application/problem+json"
+        assert "cron" in resp.get_json()["errors"]
+
+        with db.get_db() as conn:
+            q = conn.execute("SELECT * FROM queries WHERE query='fedora'").fetchone()
+        assert q is None
+
 
 class TestUpdateQuery:
     def test_delete(self, client):
@@ -1026,6 +1036,16 @@ class TestUpdateQuery:
             q = conn.execute("SELECT cron, next_run FROM queries WHERE id=?", (qid,)).fetchone()
         assert q["cron"] == "*/15 * * * *"
         assert q["next_run"] is not None
+
+    def test_update_invalid_cron(self, client):
+        qid = _insert_query(cron="*/15 * * * *")
+        resp = patch_json(client, f"/api/queries/{qid}", {"cron": "99 99 * * *"})
+        assert resp.status_code == 400
+        assert resp.content_type == "application/problem+json"
+
+        with db.get_db() as conn:
+            q = conn.execute("SELECT cron FROM queries WHERE id=?", (qid,)).fetchone()
+        assert q["cron"] == "*/15 * * * *"
 
     def test_update_excluded_indexers(self, client):
         qid = _insert_query()
@@ -1203,6 +1223,16 @@ class TestPutSettings:
         db.set_setting("default_excluded_indexers", "1,2")
         client.put("/api/settings", json={}, headers=_csrf_headers(client))
         assert db.get_setting("default_excluded_indexers") == ""
+
+    def test_invalid_default_cron_rejected(self, client):
+        db.set_setting("default_cron", "0 * * * *")
+        resp = client.put(
+            "/api/settings", json={"defaultCron": "invalid cron"}, headers=_csrf_headers(client)
+        )
+        assert resp.status_code == 400
+        assert resp.content_type == "application/problem+json"
+        assert "defaultCron" in resp.get_json()["errors"]
+        assert db.get_setting("default_cron") == "0 * * * *"
 
 
 class TestTestProwlarr:

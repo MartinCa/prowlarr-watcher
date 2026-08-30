@@ -73,6 +73,18 @@ def problem(status: int, title: str, detail: str | None = None, errors: dict | N
     return resp
 
 
+def _compute_next_or_400(cron_expr: str, field: str = "cron"):
+    """Scheduler.compute_next(), or a 400 problem response if the cron expression is invalid.
+
+    Returns (next_run_iso, None) on success, or (None, response) on failure —
+    callers must check for the error before using the first value.
+    """
+    try:
+        return Scheduler.compute_next(cron_expr), None
+    except ValueError:
+        return None, problem(400, "Validation failed", errors={field: ["Invalid cron expression"]})
+
+
 # ---------------------------------------------------------------------------
 # Serialization — DB rows / Prowlarr results -> camelCase JSON
 # ---------------------------------------------------------------------------
@@ -156,7 +168,9 @@ def create_query():
 
     now_iso = datetime.now(timezone.utc).isoformat()
     cron_expr = cron or get_setting("default_cron", "0 * * * *")
-    next_iso = Scheduler.compute_next(cron_expr)
+    next_iso, err = _compute_next_or_400(cron_expr)
+    if err:
+        return err
 
     with _db_lock, get_db() as conn:
         cur = conn.execute(
@@ -210,7 +224,9 @@ def update_query(qid: int):
 
     if "cron" in body:
         cron = str(body["cron"] or "").strip() or None
-        next_iso = Scheduler.compute_next(cron or get_setting("default_cron", "0 * * * *"))
+        next_iso, err = _compute_next_or_400(cron or get_setting("default_cron", "0 * * * *"))
+        if err:
+            return err
         with _db_lock, get_db() as conn:
             conn.execute("UPDATE queries SET cron=?, next_run=? WHERE id=?", (cron, next_iso, qid))
             conn.commit()
@@ -345,10 +361,15 @@ def get_settings():
 @bp.route("/settings", methods=["PUT"])
 def put_settings():
     body = request.get_json(silent=True) or {}
+    default_cron = str(body.get("defaultCron") or "0 * * * *").strip()
+    _, err = _compute_next_or_400(default_cron, field="defaultCron")
+    if err:
+        return err
+
     set_setting("prowlarr_url", str(body.get("prowlarrUrl") or "").strip())
     set_setting("prowlarr_api_key", str(body.get("prowlarrApiKey") or "").strip())
     set_setting("prowlarr_external_url", str(body.get("prowlarrExternalUrl") or "").strip())
-    set_setting("default_cron", str(body.get("defaultCron") or "0 * * * *").strip())
+    set_setting("default_cron", default_cron)
     set_setting("min_query_interval", str(body.get("minQueryInterval") or "10"))
     set_setting("max_retries", str(body.get("maxRetries") or "5"))
     set_setting("prowlarr_timeout", str(body.get("prowlarrTimeout") or "200"))
