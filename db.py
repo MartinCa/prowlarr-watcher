@@ -90,6 +90,28 @@ def init_db():
             conn.execute("ALTER TABLE queries ADD COLUMN note TEXT")
             conn.commit()
 
+        # Backfill last_new_result from existing results
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key='migrated_last_new_result_backfill'"
+        ).fetchone()
+        if not row:
+            conn.execute("""
+                UPDATE queries
+                SET last_new_result = (
+                    SELECT MAX(first_seen)
+                    FROM results
+                    WHERE results.query_id = queries.id
+                )
+                WHERE EXISTS (
+                    SELECT 1 FROM results WHERE results.query_id = queries.id
+                )
+            """)
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                ("migrated_last_new_result_backfill", "1"),
+            )
+            conn.commit()
+
 
 def get_setting(key: str, default: str = "") -> str:
     with get_db() as conn:
