@@ -1,0 +1,496 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Prowlarr Watcher API",
+    "version": "1.0.0",
+    "description": "Hand-authored spec for the Flask JSON API — kept in sync with routes.py by hand (see DESIGN.md section 9). src/lib/api-types.ts is generated from this file via openapi-typescript and must never be hand-edited."
+  },
+  "servers": [{ "url": "/api" }],
+  "paths": {
+    "/queries": {
+      "get": {
+        "operationId": "listQueries",
+        "summary": "List all queries",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Query" } }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createQuery",
+        "summary": "Create a query (seeds existing results silently)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/CreateQueryRequest" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Query" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/queries/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/QueryId" }],
+      "get": {
+        "operationId": "getQuery",
+        "summary": "Get a query and its results",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/QueryDetail" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "patch": {
+        "operationId": "updateQuery",
+        "summary": "Partially update a query (enabled, cron, or excludedIndexers)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/UpdateQueryRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Query" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteQuery",
+        "summary": "Delete a query and its results",
+        "responses": {
+          "204": { "description": "No Content" },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/queries/{id}/run": {
+      "parameters": [{ "$ref": "#/components/parameters/QueryId" }],
+      "post": {
+        "operationId": "runQuery",
+        "summary": "Run a query now (interactive priority)",
+        "responses": {
+          "202": { "description": "Accepted" },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/search-preview": {
+      "post": {
+        "operationId": "searchPreview",
+        "summary": "Submit an ad-hoc preview search",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["query"],
+                "properties": { "query": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["jobId"],
+                  "properties": { "jobId": { "type": "string" } }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/jobs/{jobId}": {
+      "parameters": [
+        {
+          "name": "jobId",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" }
+        }
+      ],
+      "get": {
+        "operationId": "getJob",
+        "summary": "Poll a search job's status and results",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Job" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/queue-status": {
+      "get": {
+        "operationId": "getQueueStatus",
+        "summary": "Live work-queue state for UI polling",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/QueueStatus" } }
+            }
+          }
+        }
+      }
+    },
+    "/indexers": {
+      "get": {
+        "operationId": "listIndexers",
+        "summary": "List configured Prowlarr indexers",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["indexers"],
+                  "properties": {
+                    "indexers": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Indexer" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "502": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "operationId": "getSettings",
+        "summary": "Get current settings",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Settings" } }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "putSettings",
+        "summary": "Replace settings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/Settings" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Settings" } }
+            }
+          }
+        }
+      }
+    },
+    "/settings/test-prowlarr": {
+      "post": {
+        "operationId": "testProwlarr",
+        "summary": "Test connectivity to a Prowlarr instance",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prowlarrUrl": { "type": "string" },
+                  "prowlarrApiKey": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TestResult" } }
+            }
+          }
+        }
+      }
+    },
+    "/settings/test-apprise": {
+      "post": {
+        "operationId": "testApprise",
+        "summary": "Send a test Apprise notification",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "appriseUrls": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TestResult" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "QueryId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer" }
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "RFC 9457 problem details",
+        "content": {
+          "application/problem+json": {
+            "schema": { "$ref": "#/components/schemas/ProblemDetails" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Query": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "query",
+          "cron",
+          "enabled",
+          "createdAt",
+          "lastRun",
+          "nextRun",
+          "lastCount",
+          "lastError",
+          "excludedIndexers"
+        ],
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "query": { "type": "string" },
+          "cron": { "type": ["string", "null"] },
+          "enabled": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "lastRun": { "type": ["string", "null"], "format": "date-time" },
+          "nextRun": { "type": ["string", "null"], "format": "date-time" },
+          "lastCount": { "type": ["integer", "null"] },
+          "lastError": { "type": ["string", "null"] },
+          "excludedIndexers": {
+            "description": "null means: inherit the default exclusion list from Settings",
+            "type": ["array", "null"],
+            "items": { "type": "integer" }
+          }
+        }
+      },
+      "QueryDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Query" },
+          {
+            "type": "object",
+            "required": ["results"],
+            "properties": {
+              "results": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/Result" }
+              }
+            }
+          }
+        ]
+      },
+      "Result": {
+        "type": "object",
+        "required": [
+          "id",
+          "resultHash",
+          "title",
+          "indexer",
+          "size",
+          "guid",
+          "infoUrl",
+          "downloadUrl",
+          "seeders",
+          "firstSeen",
+          "isNew"
+        ],
+        "properties": {
+          "id": { "type": "integer" },
+          "resultHash": { "type": "string" },
+          "title": { "type": ["string", "null"] },
+          "indexer": { "type": ["string", "null"] },
+          "size": { "type": ["integer", "null"] },
+          "guid": { "type": ["string", "null"] },
+          "infoUrl": { "type": ["string", "null"] },
+          "downloadUrl": { "type": ["string", "null"] },
+          "seeders": { "type": ["integer", "null"] },
+          "firstSeen": { "type": "string", "format": "date-time" },
+          "isNew": { "type": "boolean" }
+        }
+      },
+      "PreviewResult": {
+        "type": "object",
+        "properties": {
+          "title": { "type": ["string", "null"] },
+          "indexer": { "type": ["string", "null"] },
+          "size": { "type": ["integer", "null"] },
+          "seeders": { "type": ["integer", "null"] },
+          "guid": { "type": ["string", "null"] },
+          "infoUrl": { "type": ["string", "null"] },
+          "downloadUrl": { "type": ["string", "null"] }
+        }
+      },
+      "CreateQueryRequest": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": { "type": "string" },
+          "name": { "type": "string" },
+          "cron": { "type": "string" }
+        }
+      },
+      "UpdateQueryRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "cron": { "type": ["string", "null"] },
+          "excludedIndexers": { "type": ["array", "null"], "items": { "type": "integer" } }
+        }
+      },
+      "Job": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "retrying", "done", "error"]
+          },
+          "error": { "type": "string" },
+          "results": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PreviewResult" }
+          }
+        }
+      },
+      "QueueStatus": {
+        "type": "object",
+        "required": ["queries", "preview"],
+        "properties": {
+          "queries": {
+            "type": "object",
+            "additionalProperties": { "type": "string", "enum": ["queued", "running"] }
+          },
+          "preview": {
+            "type": ["string", "null"],
+            "enum": ["queued", "running", null]
+          }
+        }
+      },
+      "Indexer": {
+        "type": "object",
+        "required": ["id", "name", "enable"],
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "enable": { "type": "boolean" }
+        }
+      },
+      "Settings": {
+        "type": "object",
+        "required": [
+          "prowlarrUrl",
+          "prowlarrApiKey",
+          "prowlarrExternalUrl",
+          "defaultCron",
+          "minQueryInterval",
+          "maxRetries",
+          "prowlarrTimeout",
+          "appriseUrls",
+          "defaultExcludedIndexers"
+        ],
+        "properties": {
+          "prowlarrUrl": { "type": "string" },
+          "prowlarrApiKey": { "type": "string" },
+          "prowlarrExternalUrl": { "type": "string" },
+          "defaultCron": { "type": "string" },
+          "minQueryInterval": { "type": "integer" },
+          "maxRetries": { "type": "integer" },
+          "prowlarrTimeout": { "type": "integer" },
+          "appriseUrls": { "type": "string" },
+          "defaultExcludedIndexers": { "type": "array", "items": { "type": "integer" } }
+        }
+      },
+      "TestResult": {
+        "type": "object",
+        "required": ["ok", "message"],
+        "properties": {
+          "ok": { "type": "boolean" },
+          "message": { "type": "string" }
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "required": ["status", "title"],
+        "properties": {
+          "type": { "type": "string" },
+          "title": { "type": "string" },
+          "status": { "type": "integer" },
+          "detail": { "type": "string" },
+          "instance": { "type": "string" },
+          "errors": {
+            "type": "object",
+            "additionalProperties": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}
