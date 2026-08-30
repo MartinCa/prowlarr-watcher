@@ -1,0 +1,8 @@
+.git
+data/
+__pycache__/
+*.pyc
+*.pyo
+.ruff_cache/
+frontend/node_modules/
+frontend/dist/
