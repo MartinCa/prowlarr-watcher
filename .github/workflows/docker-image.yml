@@ -41,4 +41,4 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           secrets: |
-            github_packages_token=${{ secrets.GH_PACKAGES_TOKEN }}
+            github_packages_token=${{ secrets.FRONTEND_KIT_PACKAGES_TOKEN }}
