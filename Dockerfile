@@ -4,9 +4,8 @@ WORKDIR /frontend
 
 RUN corepack enable
 
-COPY frontend/package.json frontend/pnpm-lock.yaml frontend/.npmrc ./
-RUN --mount=type=secret,id=github_packages_token \
-    GITHUB_PACKAGES_TOKEN="$(cat /run/secrets/github_packages_token)" pnpm install --frozen-lockfile
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY frontend/ ./
 RUN pnpm build

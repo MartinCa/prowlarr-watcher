@@ -60,9 +60,9 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
     devDependencies:
-      '@martinca/frontend-config':
-        specifier: ^0.1.1
-        version: 0.1.1(eslint@10.9.1(jiti@2.7.0))(prettier@3.9.6)(typescript@6.0.3)
+      '@martinrun/frontend-config':
+        specifier: ^0.2.0
+        version: 0.2.0(eslint@10.9.1(jiti@2.7.0))(prettier-plugin-tailwindcss@0.8.1(prettier@3.9.6))(prettier@3.9.6)(typescript@6.0.3)
       '@tanstack/router-plugin':
         specifier: ^1.168.35
         version: 1.168.35(@tanstack/react-router@1.170.32(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(rolldown@1.2.6)(vite@8.2.2(@types/node@24.13.3)(jiti@2.7.0))
@@ -368,11 +368,12 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@martinca/frontend-config@0.1.1':
-    resolution: {integrity: sha512-Q5pOY84DykAAVKo0zYWeR5NHp0Br5+e+PUe0BdoowAwQ83kqaqC+YHnW0RRREPS/kXqS66Io5Q/lKZUAvm42qw==, tarball: https://npm.pkg.github.com/download/@martinca/frontend-config/0.1.1/f02b014ede2f96d26f741b521ea48f7b73b3e3de}
+  '@martinrun/frontend-config@0.2.0':
+    resolution: {integrity: sha512-sSlK9VAOUq3QTo3yPLRBpgWvehSSCK4SU1g8kKC2wtmnFDWDQUqcQmkuNv6DqMvsDZbRVYo4TuTZbhxOYUo/ZQ==}
     peerDependencies:
       eslint: '>=9'
       prettier: '>=3'
+      prettier-plugin-tailwindcss: '>=0.6'
       typescript: '>=5.5'
 
   '@modelcontextprotocol/sdk@1.30.0':
@@ -2995,7 +2996,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@martinca/frontend-config@0.1.1(eslint@10.9.1(jiti@2.7.0))(prettier@3.9.6)(typescript@6.0.3)':
+  '@martinrun/frontend-config@0.2.0(eslint@10.9.1(jiti@2.7.0))(prettier-plugin-tailwindcss@0.8.1(prettier@3.9.6))(prettier@3.9.6)(typescript@6.0.3)':
     dependencies:
       '@eslint/js': 10.0.1(eslint@10.9.1(jiti@2.7.0))
       eslint: 10.9.1(jiti@2.7.0)
@@ -3004,6 +3005,7 @@ snapshots:
       eslint-plugin-react-refresh: 0.5.5(eslint@10.9.1(jiti@2.7.0))
       globals: 17.11.0
       prettier: 3.9.6
+      prettier-plugin-tailwindcss: 0.8.1(prettier@3.9.6)
       typescript: 6.0.3
       typescript-eslint: 8.68.0(eslint@10.9.1(jiti@2.7.0))(typescript@6.0.3)
     transitivePeerDependencies:

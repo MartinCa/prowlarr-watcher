@@ -1,3 +1,3 @@
-import config from "@martinca/frontend-config/prettier";
+import config from "@martinrun/frontend-config/prettier";
 
 export default config;

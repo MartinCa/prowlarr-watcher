@@ -1,5 +1,5 @@
 {
-  "extends": "@martinca/frontend-config/tsconfig",
+  "extends": "@martinrun/frontend-config/tsconfig",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "types": ["node"],
