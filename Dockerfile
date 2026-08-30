@@ -4,7 +4,11 @@ WORKDIR /frontend
 
 RUN corepack enable
 
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+# pnpm-workspace.yaml carries the supply-chain settings (trustLockfile,
+# minimumReleaseAgeExclude). It has to be in this layer, not just in the
+# repo — without it pnpm 11 applies its default minimumReleaseAge here and
+# rejects any lockfile entry published in the last day.
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY frontend/ ./
