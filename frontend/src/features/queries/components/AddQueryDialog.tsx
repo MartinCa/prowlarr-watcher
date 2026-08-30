@@ -28,6 +28,13 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
   const job = useJob(jobId);
   const createQuery = useCreateQuery();
 
+  const isPreviewLoading =
+    searchPreview.isPending ||
+    (job.data &&
+      (job.data.status === "queued" ||
+        job.data.status === "running" ||
+        job.data.status === "retrying"));
+
   function reset() {
     setQueryText("");
     setName("");
@@ -73,7 +80,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
       }}
     >
       <DialogTrigger render={<Button />}>+ Add Query</DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>New Query</DialogTitle>
         </DialogHeader>
@@ -89,8 +96,13 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
                 required
                 autoFocus
               />
-              <Button type="button" variant="outline" onClick={handlePreview}>
-                Preview
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePreview}
+                disabled={Boolean(isPreviewLoading) || !queryText.trim()}
+              >
+                {isPreviewLoading ? "Searching…" : "Preview"}
               </Button>
             </div>
             <p className="text-muted-foreground text-xs">
@@ -123,22 +135,29 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label>Preview</Label>
-            <div className="bg-muted/30 min-h-20 rounded-md border p-3">
+            <div className="flex items-center justify-between">
+              <Label>Preview</Label>
+              {job.data?.status === "done" && job.data.results && (
+                <span className="text-muted-foreground text-xs">
+                  {job.data.results.length} {job.data.results.length === 1 ? "result" : "results"}
+                </span>
+              )}
+            </div>
+            <div className="bg-muted/30 min-h-20 overflow-hidden rounded-md border">
               {job.data?.status === "error" && (
-                <p className="text-destructive text-sm">Search failed: {job.data.error}</p>
+                <p className="text-destructive p-3 text-sm">Search failed: {job.data.error}</p>
               )}
               {job.data?.status === "done" && <ResultsTable results={job.data.results ?? []} />}
               {job.data &&
                 (job.data.status === "queued" ||
                   job.data.status === "running" ||
                   job.data.status === "retrying") && (
-                  <p className="text-muted-foreground text-sm">
+                  <p className="text-muted-foreground p-3 text-sm">
                     {job.data.status === "queued" ? "Queued — waiting…" : "Searching Prowlarr…"}
                   </p>
                 )}
               {!job.data && (
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground p-3 text-sm">
                   Type a query above and click Preview.
                 </p>
               )}
