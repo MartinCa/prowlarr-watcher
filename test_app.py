@@ -52,7 +52,25 @@ def _reset_indexer_cache():
 def client():
     app_mod.app.config["TESTING"] = True
     with app_mod.app.test_client() as c:
+        c.get("/api/queries")  # primes the CSRF cookie
         yield c
+
+
+def _csrf_headers(client):
+    cookie = client.get_cookie(routes.CSRF_COOKIE)
+    return {routes.CSRF_HEADER: cookie.value} if cookie else {}
+
+
+def post_json(client, path, body=None):
+    return client.post(path, json=body or {}, headers=_csrf_headers(client))
+
+
+def patch_json(client, path, body=None):
+    return client.patch(path, json=body or {}, headers=_csrf_headers(client))
+
+
+def delete_json(client, path):
+    return client.delete(path, headers=_csrf_headers(client))
 
 
 def _configure_prowlarr():
@@ -160,29 +178,6 @@ class TestFormatSize:
 
     def test_terabytes(self):
         assert prowlarr.format_size(3 * 1024**4) == "3.0 TB"
-
-
-class TestTimeagoFilter:
-    def test_none_returns_never(self):
-        with app_mod.app.app_context():
-            assert routes.timeago_filter(None) == "never"
-
-    def test_recent_past(self):
-        with app_mod.app.app_context():
-            now = datetime.now(timezone.utc)
-            assert routes.timeago_filter(now.isoformat()) == "just now"
-
-    def test_future(self):
-        with app_mod.app.app_context():
-            from datetime import timedelta
-
-            future = datetime.now(timezone.utc) + timedelta(hours=2)
-            result = routes.timeago_filter(future.isoformat())
-            assert result.startswith("in ")
-
-    def test_invalid_returns_raw(self):
-        with app_mod.app.app_context():
-            assert routes.timeago_filter("not-a-date") == "not-a-date"
 
 
 # ===========================================================================
@@ -886,195 +881,84 @@ class TestNotify:
 
 
 # ===========================================================================
-# Route tests — pages
+# Route tests — CSRF
 # ===========================================================================
-class TestIndexPage:
-    def test_get_empty(self, client):
-        resp = client.get("/")
-        assert resp.status_code == 200
-        assert b"No queries yet" in resp.data
+class TestCsrf:
+    def test_mutating_request_without_header_is_rejected(self, client):
+        resp = client.post("/api/queries", json={"query": "ubuntu"})
+        assert resp.status_code == 403
 
-    def test_get_with_queries(self, client):
+    def test_mutating_request_with_wrong_token_is_rejected(self, client):
+        resp = client.post(
+            "/api/queries", json={"query": "ubuntu"}, headers={routes.CSRF_HEADER: "bogus"}
+        )
+        assert resp.status_code == 403
+
+    def test_get_request_does_not_require_header(self, client):
+        resp = client.get("/api/queries")
+        assert resp.status_code == 200
+
+    def test_response_sets_csrf_cookie(self):
+        with app_mod.app.test_client() as c:
+            resp = c.get("/api/queries")
+            assert routes.CSRF_COOKIE in resp.headers.get("Set-Cookie", "")
+
+
+# ===========================================================================
+# Route tests — queries
+# ===========================================================================
+class TestListQueries:
+    def test_empty(self, client):
+        resp = client.get("/api/queries")
+        assert resp.status_code == 200
+        assert resp.get_json() == []
+
+    def test_with_queries(self, client):
         _insert_query(name="Ubuntu Watch")
-        resp = client.get("/")
+        resp = client.get("/api/queries")
         assert resp.status_code == 200
-        assert b"Ubuntu Watch" in resp.data
+        data = resp.get_json()
+        assert len(data) == 1
+        assert data[0]["name"] == "Ubuntu Watch"
 
 
-class TestSettingsPage:
-    def test_get(self, client):
-        resp = client.get("/settings")
-        assert resp.status_code == 200
-        assert b"Prowlarr" in resp.data
-
-    def test_post_saves_settings(self, client):
-        resp = client.post(
-            "/settings",
-            data={
-                "prowlarr_url": "http://new-host:9696",
-                "prowlarr_api_key": "newkey",
-                "default_cron": "*/10 * * * *",
-                "min_query_interval": "5",
-                "prowlarr_timeout": "30",
-                "apprise_urls": "json://localhost",
-            },
-            follow_redirects=True,
-        )
-        assert resp.status_code == 200
-        assert db.get_setting("prowlarr_url") == "http://new-host:9696"
-        assert db.get_setting("prowlarr_api_key") == "newkey"
-        assert db.get_setting("default_cron") == "*/10 * * * *"
-        assert db.get_setting("min_query_interval") == "5"
-        assert db.get_setting("prowlarr_timeout") == "30"
-        assert db.get_setting("apprise_urls") == "json://localhost"
-
-    def test_saved_flash(self, client):
-        resp = client.post(
-            "/settings",
-            data={
-                "prowlarr_url": "http://x",
-                "prowlarr_api_key": "k",
-                "default_cron": "0 * * * *",
-                "min_query_interval": "10",
-                "apprise_urls": "",
-            },
-            follow_redirects=True,
-        )
-        assert b"Settings saved" in resp.data
-
-    def test_post_saves_excluded_indexers(self, client):
-        client.post(
-            "/settings",
-            data={
-                "prowlarr_url": "http://x",
-                "prowlarr_api_key": "k",
-                "default_cron": "0 * * * *",
-                "min_query_interval": "10",
-                "apprise_urls": "",
-                "excluded_indexers": ["1", "3"],
-            },
-        )
-        assert db.get_setting("default_excluded_indexers") == "1,3"
-
-    def test_post_without_indexers_clears_exclusions(self, client):
-        db.set_setting("default_excluded_indexers", "1,2")
-        client.post(
-            "/settings",
-            data={
-                "prowlarr_url": "http://x",
-                "prowlarr_api_key": "k",
-                "default_cron": "0 * * * *",
-                "min_query_interval": "10",
-                "apprise_urls": "",
-            },
-        )
-        assert db.get_setting("default_excluded_indexers") == ""
-
-
-class TestQueryDetailPage:
+class TestGetQuery:
     def test_get_existing(self, client):
         qid = _insert_query(name="Detail Test")
         _insert_result(qid, title="Result One")
-        resp = client.get(f"/query/{qid}")
+        resp = client.get(f"/api/queries/{qid}")
         assert resp.status_code == 200
-        assert b"Detail Test" in resp.data
-        assert b"Result One" in resp.data
+        data = resp.get_json()
+        assert data["name"] == "Detail Test"
+        assert data["results"][0]["title"] == "Result One"
 
     def test_get_nonexistent(self, client):
-        resp = client.get("/query/9999")
+        resp = client.get("/api/queries/9999")
         assert resp.status_code == 404
+        assert resp.content_type == "application/problem+json"
 
-    def test_get_shows_default_and_override_state(self, client):
+    def test_shows_default_excluded_indexers_as_null_override(self, client):
         db.set_setting("default_excluded_indexers", "1,2")
         qid = _insert_query(name="Indexer Test")
-        resp = client.get(f"/query/{qid}")
-        assert resp.status_code == 200
-        assert b"const defaultExcludedIndexers = [1, 2]" in resp.data
-        assert b"const queryExcludedIndexers = null" in resp.data
+        data = client.get(f"/api/queries/{qid}").get_json()
+        assert data["excludedIndexers"] is None
 
-    def test_get_shows_query_override(self, client):
+    def test_shows_query_override(self, client):
         qid = _insert_query(name="Indexer Override Test")
         with db._db_lock, db.get_db() as conn:
             conn.execute("UPDATE queries SET excluded_indexers=? WHERE id=?", ("7", qid))
             conn.commit()
-        resp = client.get(f"/query/{qid}")
-        assert b"const queryExcludedIndexers = [7]" in resp.data
+        data = client.get(f"/api/queries/{qid}").get_json()
+        assert data["excludedIndexers"] == [7]
 
 
-# ===========================================================================
-# Route tests — API actions
-# ===========================================================================
-class TestSearchPreview:
-    @patch.object(worker.work_queue, "submit")
-    def test_empty_query(self, mock_submit, client):
-        resp = client.post("/api/search-preview", data={"query": ""})
-        assert b"Enter a query above" in resp.data
-        mock_submit.assert_not_called()
-
-    @patch.object(worker.work_queue, "submit")
-    def test_submits_job_and_returns_polling_div(self, mock_submit, client):
-        job = worker.Job(job_id="abc123")
-        mock_submit.return_value = job
-
-        resp = client.post("/api/search-preview", data={"query": "ubuntu"})
-        assert resp.status_code == 200
-        assert b"abc123" in resp.data
-        assert b"hx-get" in resp.data
-        assert b"every 1s" in resp.data
-        mock_submit.assert_called_once()
-
-
-class TestJobPreview:
-    @patch.object(worker.work_queue, "get_job")
-    def test_not_found(self, mock_get, client):
-        mock_get.return_value = None
-        resp = client.get("/api/job/bad-id/preview")
-        assert b"expired or not found" in resp.data
-
-    @patch.object(worker.work_queue, "get_job")
-    def test_queued_state(self, mock_get, client):
-        job = worker.Job(job_id="q1", status="queued")
-        mock_get.return_value = job
-        resp = client.get("/api/job/q1/preview")
-        assert b"queued" in resp.data
-        assert b"hx-get" in resp.data
-
-    @patch.object(worker.work_queue, "get_job")
-    def test_running_state(self, mock_get, client):
-        job = worker.Job(job_id="r1", status="running")
-        mock_get.return_value = job
-        resp = client.get("/api/job/r1/preview")
-        assert b"searching" in resp.data
-        assert b"hx-get" in resp.data
-
-    @patch.object(worker.work_queue, "get_job")
-    def test_error_state(self, mock_get, client):
-        job = worker.Job(job_id="e1", status="error", error="timeout")
-        mock_get.return_value = job
-        resp = client.get("/api/job/e1/preview")
-        assert b"Search failed" in resp.data
-        assert b"timeout" in resp.data
-
-    @patch.object(worker.work_queue, "get_job")
-    def test_done_returns_results(self, mock_get, client):
-        job = worker.Job(job_id="d1", status="done", result=SAMPLE_RESULTS)
-        mock_get.return_value = job
-        resp = client.get("/api/job/d1/preview")
-        assert b"Ubuntu 24.04" in resp.data
-        # Should NOT contain polling trigger
-        assert b"hx-trigger" not in resp.data
-
-
-class TestAddQuery:
+class TestCreateQuery:
     @patch.object(worker.work_queue, "submit")
     def test_creates_query_and_submits_seed(self, mock_submit, client):
         mock_submit.return_value = worker.Job()
-        resp = client.post(
-            "/api/query",
-            data={"name": "New Watch", "query": "fedora", "cron": ""},
-            follow_redirects=False,
-        )
-        assert resp.status_code == 302
+        resp = post_json(client, "/api/queries", {"name": "New Watch", "query": "fedora"})
+        assert resp.status_code == 201
+        assert resp.get_json()["name"] == "New Watch"
 
         with db.get_db() as conn:
             q = conn.execute("SELECT * FROM queries WHERE name='New Watch'").fetchone()
@@ -1090,9 +974,8 @@ class TestAddQuery:
     @patch.object(worker.work_queue, "submit")
     def test_custom_cron(self, mock_submit, client):
         mock_submit.return_value = worker.Job()
-        client.post(
-            "/api/query",
-            data={"name": "Cron Test", "query": "test", "cron": "*/5 * * * *"},
+        post_json(
+            client, "/api/queries", {"name": "Cron Test", "query": "test", "cron": "*/5 * * * *"}
         )
 
         with db.get_db() as conn:
@@ -1100,23 +983,28 @@ class TestAddQuery:
         assert q["cron"] == "*/5 * * * *"
 
     def test_missing_fields(self, client):
-        resp = client.post("/api/query", data={"name": "", "query": ""})
+        resp = post_json(client, "/api/queries", {"name": "", "query": ""})
         assert resp.status_code == 400
+        assert resp.content_type == "application/problem+json"
 
 
 class TestUpdateQuery:
     def test_delete(self, client):
         qid = _insert_query(name="To Delete")
-        resp = client.post(f"/api/query/{qid}", data={"action": "delete"}, follow_redirects=False)
-        assert resp.status_code == 302
+        resp = delete_json(client, f"/api/queries/{qid}")
+        assert resp.status_code == 204
 
         with db.get_db() as conn:
             q = conn.execute("SELECT * FROM queries WHERE id=?", (qid,)).fetchone()
         assert q is None
 
+    def test_delete_nonexistent(self, client):
+        resp = delete_json(client, "/api/queries/9999")
+        assert resp.status_code == 404
+
     def test_toggle_disable(self, client):
         qid = _insert_query(enabled=1)
-        client.post(f"/api/query/{qid}", data={"action": "toggle"})
+        patch_json(client, f"/api/queries/{qid}", {"enabled": False})
 
         with db.get_db() as conn:
             q = conn.execute("SELECT enabled FROM queries WHERE id=?", (qid,)).fetchone()
@@ -1124,37 +1012,120 @@ class TestUpdateQuery:
 
     def test_toggle_enable(self, client):
         qid = _insert_query(enabled=0)
-        client.post(f"/api/query/{qid}", data={"action": "toggle"})
+        patch_json(client, f"/api/queries/{qid}", {"enabled": True})
 
         with db.get_db() as conn:
             q = conn.execute("SELECT enabled FROM queries WHERE id=?", (qid,)).fetchone()
         assert q["enabled"] == 1
 
-    @patch.object(worker.work_queue, "submit")
-    def test_run_now(self, mock_submit, client):
-        mock_submit.return_value = worker.Job()
-        qid = _insert_query(query="my-search")
-        resp = client.post(f"/api/query/{qid}", data={"action": "run_now"}, follow_redirects=False)
-        assert resp.status_code == 302
-
-        mock_submit.assert_called_once()
-        call_kwargs = mock_submit.call_args.kwargs
-        assert call_kwargs["priority"] == worker.Priority.HIGH
-        assert call_kwargs["label"] == f"run:{qid}"
-
     def test_update_cron(self, client):
         qid = _insert_query()
-        client.post(f"/api/query/{qid}", data={"action": "update_cron", "cron": "*/15 * * * *"})
+        patch_json(client, f"/api/queries/{qid}", {"cron": "*/15 * * * *"})
 
         with db.get_db() as conn:
             q = conn.execute("SELECT cron, next_run FROM queries WHERE id=?", (qid,)).fetchone()
         assert q["cron"] == "*/15 * * * *"
         assert q["next_run"] is not None
 
-    def test_unknown_action(self, client):
+    def test_update_excluded_indexers(self, client):
         qid = _insert_query()
-        resp = client.post(f"/api/query/{qid}", data={"action": "bogus"})
+        patch_json(client, f"/api/queries/{qid}", {"excludedIndexers": [1, 3]})
+
+        data = client.get(f"/api/queries/{qid}").get_json()
+        assert data["excludedIndexers"] == [1, 3]
+
+    def test_clear_excluded_indexers_override(self, client):
+        qid = _insert_query()
+        with db._db_lock, db.get_db() as conn:
+            conn.execute("UPDATE queries SET excluded_indexers=? WHERE id=?", ("1,2", qid))
+            conn.commit()
+        patch_json(client, f"/api/queries/{qid}", {"excludedIndexers": None})
+
+        data = client.get(f"/api/queries/{qid}").get_json()
+        assert data["excludedIndexers"] is None
+
+    def test_update_nonexistent(self, client):
+        resp = patch_json(client, "/api/queries/9999", {"enabled": False})
+        assert resp.status_code == 404
+
+
+class TestRunQuery:
+    @patch.object(worker.work_queue, "submit")
+    def test_run_now(self, mock_submit, client):
+        mock_submit.return_value = worker.Job()
+        qid = _insert_query(query="my-search")
+        resp = post_json(client, f"/api/queries/{qid}/run")
+        assert resp.status_code == 202
+
+        mock_submit.assert_called_once()
+        call_kwargs = mock_submit.call_args.kwargs
+        assert call_kwargs["priority"] == worker.Priority.HIGH
+        assert call_kwargs["label"] == f"run:{qid}"
+
+    def test_run_nonexistent(self, client):
+        resp = post_json(client, "/api/queries/9999/run")
+        assert resp.status_code == 404
+
+
+# ===========================================================================
+# Route tests — search preview / job polling
+# ===========================================================================
+class TestSearchPreview:
+    @patch.object(worker.work_queue, "submit")
+    def test_empty_query(self, mock_submit, client):
+        resp = post_json(client, "/api/search-preview", {"query": ""})
         assert resp.status_code == 400
+        mock_submit.assert_not_called()
+
+    @patch.object(worker.work_queue, "submit")
+    def test_submits_job_and_returns_job_id(self, mock_submit, client):
+        job = worker.Job(job_id="abc123")
+        mock_submit.return_value = job
+
+        resp = post_json(client, "/api/search-preview", {"query": "ubuntu"})
+        assert resp.status_code == 202
+        assert resp.get_json()["jobId"] == "abc123"
+        mock_submit.assert_called_once()
+
+
+class TestGetJob:
+    @patch.object(worker.work_queue, "get_job")
+    def test_not_found(self, mock_get, client):
+        mock_get.return_value = None
+        resp = client.get("/api/jobs/bad-id")
+        assert resp.status_code == 404
+
+    @patch.object(worker.work_queue, "get_job")
+    def test_queued_state(self, mock_get, client):
+        job = worker.Job(job_id="q1", status="queued")
+        mock_get.return_value = job
+        resp = client.get("/api/jobs/q1")
+        assert resp.get_json()["status"] == "queued"
+
+    @patch.object(worker.work_queue, "get_job")
+    def test_running_state(self, mock_get, client):
+        job = worker.Job(job_id="r1", status="running")
+        mock_get.return_value = job
+        resp = client.get("/api/jobs/r1")
+        assert resp.get_json()["status"] == "running"
+
+    @patch.object(worker.work_queue, "get_job")
+    def test_error_state(self, mock_get, client):
+        job = worker.Job(job_id="e1", status="error", error="timeout")
+        mock_get.return_value = job
+        resp = client.get("/api/jobs/e1")
+        data = resp.get_json()
+        assert data["status"] == "error"
+        assert data["error"] == "timeout"
+
+    @patch.object(worker.work_queue, "get_job")
+    def test_done_returns_results(self, mock_get, client):
+        job = worker.Job(job_id="d1", status="done", result=SAMPLE_RESULTS)
+        mock_get.return_value = job
+        resp = client.get("/api/jobs/d1")
+        data = resp.get_json()
+        assert data["status"] == "done"
+        assert data["results"][0]["title"] == "Ubuntu 24.04 LTS"
 
 
 class TestQueueStatus:
@@ -1194,6 +1165,46 @@ class TestQueueStatus:
         assert data["preview"] == "running"
 
 
+class TestGetSettings:
+    def test_get(self, client):
+        resp = client.get("/api/settings")
+        assert resp.status_code == 200
+        assert "prowlarrUrl" in resp.get_json()
+
+
+class TestPutSettings:
+    def test_saves_settings(self, client):
+        body = {
+            "prowlarrUrl": "http://new-host:9696",
+            "prowlarrApiKey": "newkey",
+            "defaultCron": "*/10 * * * *",
+            "minQueryInterval": 5,
+            "prowlarrTimeout": 30,
+            "appriseUrls": "json://localhost",
+        }
+        resp = client.put("/api/settings", json=body, headers=_csrf_headers(client))
+        assert resp.status_code == 200
+        assert db.get_setting("prowlarr_url") == "http://new-host:9696"
+        assert db.get_setting("prowlarr_api_key") == "newkey"
+        assert db.get_setting("default_cron") == "*/10 * * * *"
+        assert db.get_setting("min_query_interval") == "5"
+        assert db.get_setting("prowlarr_timeout") == "30"
+        assert db.get_setting("apprise_urls") == "json://localhost"
+
+    def test_saves_excluded_indexers(self, client):
+        client.put(
+            "/api/settings",
+            json={"defaultExcludedIndexers": [1, 3]},
+            headers=_csrf_headers(client),
+        )
+        assert db.get_setting("default_excluded_indexers") == "1,3"
+
+    def test_without_indexers_clears_exclusions(self, client):
+        db.set_setting("default_excluded_indexers", "1,2")
+        client.put("/api/settings", json={}, headers=_csrf_headers(client))
+        assert db.get_setting("default_excluded_indexers") == ""
+
+
 class TestTestProwlarr:
     @patch("routes.requests.get")
     def test_success(self, mock_get, client):
@@ -1202,25 +1213,29 @@ class TestTestProwlarr:
         mock_resp.raise_for_status = MagicMock()
         mock_get.return_value = mock_resp
 
-        resp = client.post(
-            "/api/test-prowlarr",
-            data={"prowlarr_url": "http://localhost:9696", "prowlarr_api_key": "key"},
+        resp = post_json(
+            client,
+            "/api/settings/test-prowlarr",
+            {"prowlarrUrl": "http://localhost:9696", "prowlarrApiKey": "key"},
         )
         data = resp.get_json()
         assert data["ok"] is True
         assert "1.2.3" in data["message"]
 
     def test_missing_fields(self, client):
-        resp = client.post("/api/test-prowlarr", data={"prowlarr_url": "", "prowlarr_api_key": ""})
+        resp = post_json(
+            client, "/api/settings/test-prowlarr", {"prowlarrUrl": "", "prowlarrApiKey": ""}
+        )
         data = resp.get_json()
         assert data["ok"] is False
 
     @patch("routes.requests.get")
     def test_connection_error(self, mock_get, client):
         mock_get.side_effect = __import__("requests").exceptions.ConnectionError()
-        resp = client.post(
-            "/api/test-prowlarr",
-            data={"prowlarr_url": "http://x", "prowlarr_api_key": "k"},
+        resp = post_json(
+            client,
+            "/api/settings/test-prowlarr",
+            {"prowlarrUrl": "http://x", "prowlarrApiKey": "k"},
         )
         data = resp.get_json()
         assert data["ok"] is False
@@ -1229,9 +1244,10 @@ class TestTestProwlarr:
     @patch("routes.requests.get")
     def test_timeout(self, mock_get, client):
         mock_get.side_effect = __import__("requests").exceptions.Timeout()
-        resp = client.post(
-            "/api/test-prowlarr",
-            data={"prowlarr_url": "http://x", "prowlarr_api_key": "k"},
+        resp = post_json(
+            client,
+            "/api/settings/test-prowlarr",
+            {"prowlarrUrl": "http://x", "prowlarrApiKey": "k"},
         )
         data = resp.get_json()
         assert data["ok"] is False
@@ -1245,9 +1261,10 @@ class TestTestProwlarr:
             response=mock_resp
         )
         mock_get.return_value = mock_resp
-        resp = client.post(
-            "/api/test-prowlarr",
-            data={"prowlarr_url": "http://x", "prowlarr_api_key": "k"},
+        resp = post_json(
+            client,
+            "/api/settings/test-prowlarr",
+            {"prowlarrUrl": "http://x", "prowlarrApiKey": "k"},
         )
         data = resp.get_json()
         assert data["ok"] is False
@@ -1257,7 +1274,7 @@ class TestTestProwlarr:
 class TestTestApprise:
     @patch("routes.apprise.Apprise")
     def test_no_urls(self, mock_cls, client):
-        resp = client.post("/api/test-apprise", data={"apprise_urls": ""})
+        resp = post_json(client, "/api/settings/test-apprise", {"appriseUrls": ""})
         data = resp.get_json()
         assert data["ok"] is False
 
@@ -1267,7 +1284,7 @@ class TestTestApprise:
         mock_ap.notify.return_value = True
         mock_cls.return_value = mock_ap
 
-        resp = client.post("/api/test-apprise", data={"apprise_urls": "json://localhost"})
+        resp = post_json(client, "/api/settings/test-apprise", {"appriseUrls": "json://localhost"})
         data = resp.get_json()
         assert data["ok"] is True
         assert "Sent" in data["message"]
