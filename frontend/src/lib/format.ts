@@ -28,3 +28,12 @@ export function describeCron(expr: string): string {
     return "";
   }
 }
+
+export function cronGuruUrl(expr: string): string {
+  return `https://crontab.guru/#${expr.trim().replace(/ /g, "_")}`;
+}
+
+/** Matches prowlarr.py's prowlarr_link_base(): external URL if set, else the base URL. */
+export function prowlarrLinkBase(settings: { prowlarrUrl: string; prowlarrExternalUrl: string }) {
+  return (settings.prowlarrExternalUrl || settings.prowlarrUrl).replace(/\/$/, "");
+}

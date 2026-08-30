@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResultsTable } from "@/features/queries/components/ResultsTable";
 import { useCreateQuery, useJob, useSearchPreview } from "@/features/queries/hooks";
-import { describeCron } from "@/lib/format";
+import { cronGuruUrl, describeCron } from "@/lib/format";
 import { ApiError } from "@/lib/api";
 
 export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
@@ -134,7 +134,17 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
               placeholder={defaultCron}
               className="max-w-56 font-mono"
             />
-            <p className="text-muted-foreground text-xs">{describeCron(cron || defaultCron)}</p>
+            <p className="text-muted-foreground text-xs">
+              {describeCron(cron || defaultCron)} —{" "}
+              <a
+                href={cronGuruUrl(cron || defaultCron)}
+                target="_blank"
+                rel="noopener"
+                className="hover:underline"
+              >
+                crontab.guru
+              </a>
+            </p>
           </div>
 
           <DialogFooter>

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
-import { describeCron } from "@/lib/format";
+import { cronGuruUrl, describeCron } from "@/lib/format";
 import type { Settings } from "@/lib/types";
 
 export function SettingsForm({ settings }: { settings: Settings }) {
@@ -124,7 +124,16 @@ export function SettingsForm({ settings }: { settings: Settings }) {
             />
             <p className="text-sm">{describeCron(form.defaultCron)}</p>
             <p className="text-muted-foreground text-xs">
-              Applied to queries that don&apos;t have their own schedule.
+              Applied to queries that don&apos;t have their own schedule.{" "}
+              <a
+                href={cronGuruUrl(form.defaultCron)}
+                target="_blank"
+                rel="noopener"
+                className="hover:underline"
+              >
+                crontab.guru
+              </a>{" "}
+              for syntax help.
             </p>
           </div>
           <div className="flex flex-col gap-2">

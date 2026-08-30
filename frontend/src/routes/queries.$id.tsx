@@ -17,7 +17,7 @@ import {
 } from "@/features/queries/hooks";
 import { useSettings } from "@/features/settings/hooks";
 import { ApiError } from "@/lib/api";
-import { describeCron, formatRelativeTime } from "@/lib/format";
+import { cronGuruUrl, describeCron, formatRelativeTime, prowlarrLinkBase } from "@/lib/format";
 
 export const Route = createFileRoute("/queries/$id")({ component: QueryDetailPage });
 
@@ -48,6 +48,7 @@ function QueryDetailPage() {
 
   const query = detail.data;
   const defaultCron = settings.data?.defaultCron ?? "0 * * * *";
+  const prowlarrBase = settings.data ? prowlarrLinkBase(settings.data) : "";
   const cron = cronInput ?? query.cron ?? "";
   const override = overrideEnabled ?? query.excludedIndexers !== null;
   const excluded = excludedDraft ?? query.excludedIndexers ?? [];
@@ -91,6 +92,17 @@ function QueryDetailPage() {
       <Card className="flex flex-row flex-wrap items-start gap-8 p-5">
         <Field label="Search query">
           <code className="text-sm">{query.query}</code>
+          {prowlarrBase && (
+            <a
+              href={`${prowlarrBase}/search?query=${encodeURIComponent(query.query)}`}
+              target="_blank"
+              rel="noopener"
+              title="Search in Prowlarr"
+              className="text-muted-foreground ml-2 text-xs hover:underline"
+            >
+              ↗ Prowlarr
+            </a>
+          )}
         </Field>
         <Field label="Status">
           <span
@@ -147,7 +159,17 @@ function QueryDetailPage() {
               : `Using default: ${defaultCron}`}
           </span>
         </div>
-        <p className="text-sm">{describeCron(cron || defaultCron)}</p>
+        <p className="text-sm">
+          {describeCron(cron || defaultCron)} —{" "}
+          <a
+            href={cronGuruUrl(cron || defaultCron)}
+            target="_blank"
+            rel="noopener"
+            className="text-muted-foreground hover:underline"
+          >
+            crontab.guru
+          </a>
+        </p>
       </Card>
 
       <Card className="flex flex-col gap-3 p-5">
