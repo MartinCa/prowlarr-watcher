@@ -1,6 +1,7 @@
 """Comprehensive tests for Prowlarr Watcher."""
 
 import os
+import sqlite3
 import tempfile
 import threading
 import time
@@ -208,6 +209,125 @@ class TestDatabase:
         with db.get_db() as conn:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(queries)").fetchall()}
         assert "excluded_indexers" in cols
+
+    def test_migration_backfills_last_new_result_from_results(self, tmp_path, monkeypatch):
+        db_path = tmp_path / "migration_test.db"
+        monkeypatch.setattr(db, "DATA_DIR", tmp_path)
+        monkeypatch.setattr(db, "DB_PATH", db_path)
+
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript("""
+            CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE queries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                query TEXT NOT NULL,
+                cron TEXT,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                last_run TEXT,
+                next_run TEXT,
+                last_count INTEGER DEFAULT 0,
+                last_error TEXT,
+                excluded_indexers TEXT,
+                last_new_result TEXT,
+                note TEXT
+            );
+            CREATE TABLE results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query_id INTEGER NOT NULL REFERENCES queries(id) ON DELETE CASCADE,
+                result_hash TEXT NOT NULL,
+                title TEXT,
+                indexer TEXT,
+                size INTEGER,
+                guid TEXT,
+                info_url TEXT,
+                download_url TEXT,
+                seeders INTEGER,
+                first_seen TEXT NOT NULL,
+                is_new INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(query_id, result_hash)
+            );
+            INSERT INTO queries (id, name, query, created_at)
+            VALUES (1, 'Q1', 'test1', '2026-01-01T00:00:00+00:00');
+            INSERT INTO queries (id, name, query, created_at)
+            VALUES (2, 'Q2', 'test2', '2026-01-01T00:00:00+00:00');
+            INSERT INTO queries (id, name, query, created_at)
+            VALUES (3, 'Q3', 'test3', '2026-01-01T00:00:00+00:00');
+
+            -- Q1 has two results with different first_seen timestamps
+            INSERT INTO results (query_id, result_hash, first_seen)
+            VALUES (1, 'h1', '2026-01-02T10:00:00+00:00');
+            INSERT INTO results (query_id, result_hash, first_seen)
+            VALUES (1, 'h2', '2026-01-05T15:30:00+00:00');
+
+            -- Q2 has one result
+            INSERT INTO results (query_id, result_hash, first_seen)
+            VALUES (2, 'h3', '2026-01-03T12:00:00+00:00');
+
+            -- Q3 has no results
+        """)
+        conn.commit()
+        conn.close()
+
+        db.init_db()
+
+        with db.get_db() as c:
+            q1 = c.execute("SELECT last_new_result FROM queries WHERE id=1").fetchone()
+            q2 = c.execute("SELECT last_new_result FROM queries WHERE id=2").fetchone()
+            q3 = c.execute("SELECT last_new_result FROM queries WHERE id=3").fetchone()
+            flag = c.execute(
+                "SELECT value FROM settings WHERE key='migrated_last_new_result_backfill'"
+            ).fetchone()
+
+        assert q1["last_new_result"] == "2026-01-05T15:30:00+00:00"
+        assert q2["last_new_result"] == "2026-01-03T12:00:00+00:00"
+        assert q3["last_new_result"] is None
+        assert flag["value"] == "1"
+
+        # Running init_db again is idempotent
+        db.init_db()
+        with db.get_db() as c:
+            q1_after = c.execute("SELECT last_new_result FROM queries WHERE id=1").fetchone()
+        assert q1_after["last_new_result"] == "2026-01-05T15:30:00+00:00"
+
+    def test_migration_from_schema_before_last_new_result_column(self, tmp_path, monkeypatch):
+        db_path = tmp_path / "old_schema.db"
+        monkeypatch.setattr(db, "DATA_DIR", tmp_path)
+        monkeypatch.setattr(db, "DB_PATH", db_path)
+
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript("""
+            CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE queries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                query TEXT NOT NULL,
+                cron TEXT,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query_id INTEGER NOT NULL REFERENCES queries(id) ON DELETE CASCADE,
+                result_hash TEXT NOT NULL,
+                first_seen TEXT NOT NULL
+            );
+            INSERT INTO queries (id, name, query, created_at)
+            VALUES (1, 'Q1', 'test1', '2026-01-01T00:00:00+00:00');
+            INSERT INTO results (query_id, result_hash, first_seen)
+            VALUES (1, 'h1', '2026-02-01T00:00:00+00:00');
+        """)
+        conn.commit()
+        conn.close()
+
+        db.init_db()
+
+        with db.get_db() as c:
+            cols = {r[1] for r in c.execute("PRAGMA table_info(queries)").fetchall()}
+            assert "last_new_result" in cols
+            q1 = c.execute("SELECT last_new_result FROM queries WHERE id=1").fetchone()
+            assert q1["last_new_result"] == "2026-02-01T00:00:00+00:00"
 
     def test_get_setting_default(self):
         assert db.get_setting("nonexistent", "fallback") == "fallback"
@@ -544,7 +664,7 @@ class TestWorkQueue:
         worker_thread.start()
 
         for _ in range(50):
-            if job.status in ("done", "error"):
+            if (job.status in ("done", "error") and callback.called) or job.status == "error":
                 break
             time.sleep(0.05)
 
