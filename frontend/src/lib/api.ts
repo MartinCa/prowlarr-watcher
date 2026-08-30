@@ -1,4 +1,13 @@
 const BASE_URL = "/api";
+const CSRF_COOKIE = "csrf_token";
+const CSRF_HEADER = "X-CSRF-Token";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function readCsrfCookie(): string | undefined {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`));
+  const value = match?.[1];
+  return value !== undefined ? decodeURIComponent(value) : undefined;
+}
 
 /** RFC 9457 problem details. */
 export interface ProblemDetails {
@@ -75,13 +84,16 @@ async function toApiError(response: Response): Promise<ApiError> {
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, query, headers, ...init } = options;
+  const { body, query, headers, method = "GET", ...init } = options;
+  const csrfToken = SAFE_METHODS.has(method) ? undefined : readCsrfCookie();
 
   const response = await fetch(buildUrl(path, query), {
     ...init,
+    method,
     headers: {
       Accept: "application/json",
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(csrfToken ? { [CSRF_HEADER]: csrfToken } : {}),
       ...headers,
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
