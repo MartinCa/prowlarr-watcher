@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/table";
 import { formatRelativeTime, formatSize } from "@/lib/format";
 import type { PreviewResult, Result } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 function seederColor(seeders: number | null | undefined): string {
   if (seeders == null) return "text-muted-foreground";
@@ -23,26 +24,32 @@ export function ResultsTable({ results }: { results: PreviewResult[] }) {
   }
   return (
     <div className="preview-table">
-      <Table>
-        <TableHeader className="bg-popover sticky top-0 z-10">
+      <Table className="table-fixed">
+        <TableHeader className="sticky top-0 z-10 bg-popover">
           <TableRow>
             <TableHead className="bg-popover">Title</TableHead>
-            <TableHead className="bg-popover">Indexer</TableHead>
-            <TableHead className="bg-popover">Size</TableHead>
-            <TableHead className="bg-popover">Seeds</TableHead>
+            <TableHead className="bg-popover w-28 sm:w-32">Indexer</TableHead>
+            <TableHead className="bg-popover w-20 text-right sm:w-24">Size</TableHead>
+            <TableHead className="bg-popover w-14 text-right sm:w-16">Seeds</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {results.map((r, i) => (
             <TableRow key={r.guid ?? i}>
-              <TableCell className="max-w-96 truncate" title={r.title ?? undefined}>
+              <TableCell className="truncate" title={r.title ?? undefined}>
                 {r.title ?? "—"}
               </TableCell>
-              <TableCell>
-                <Badge variant="outline">{r.indexer ?? "—"}</Badge>
+              <TableCell className="truncate">
+                <Badge variant="outline" className="max-w-full truncate">
+                  {r.indexer ?? "—"}
+                </Badge>
               </TableCell>
-              <TableCell className="font-mono whitespace-nowrap">{formatSize(r.size)}</TableCell>
-              <TableCell className={seederColor(r.seeders)}>{r.seeders ?? "—"}</TableCell>
+              <TableCell className="font-mono text-right whitespace-nowrap">
+                {formatSize(r.size)}
+              </TableCell>
+              <TableCell className={cn("text-right", seederColor(r.seeders))}>
+                {r.seeders ?? "—"}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

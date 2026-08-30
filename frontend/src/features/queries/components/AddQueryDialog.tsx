@@ -80,11 +80,11 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
       }}
     >
       <DialogTrigger render={<Button />}>+ Add Query</DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>New Query</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 min-w-0">
           <div className="flex flex-col gap-2">
             <Label htmlFor="query-input">Search Query</Label>
             <div className="flex gap-2">
@@ -143,7 +143,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
                 </span>
               )}
             </div>
-            <div className="bg-muted/30 min-h-20 overflow-hidden rounded-md border">
+            <div className="bg-muted/30 min-h-20 min-w-0 overflow-hidden rounded-md border">
               {job.data?.status === "error" && (
                 <p className="text-destructive p-3 text-sm">Search failed: {job.data.error}</p>
               )}

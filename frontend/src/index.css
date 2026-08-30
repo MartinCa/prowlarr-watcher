@@ -131,7 +131,7 @@
 
 @utility preview-table {
   & [data-slot="table-container"] {
-    max-height: 12rem;
+    max-height: 10rem;
     overflow: auto;
   }
 }
