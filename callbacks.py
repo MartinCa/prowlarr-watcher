@@ -50,7 +50,7 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
     raw = job.result or []
 
     with _db_lock, get_db() as conn:
-        row = conn.execute("SELECT name, query FROM queries WHERE id=?", (qid,)).fetchone()
+        row = conn.execute("SELECT name, query, note FROM queries WHERE id=?", (qid,)).fetchone()
         if not row:
             return
 
@@ -84,7 +84,7 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
     log.info("[Q%d] %d total / %d new", qid, len(raw), len(new_items))
 
     if new_items:
-        notify_new_results(row["name"], row["query"], new_items)
+        notify_new_results(row["name"], row["query"], new_items, row["note"])
 
 
 def process_seed_result(qid: int, query_text: str, job: Job):

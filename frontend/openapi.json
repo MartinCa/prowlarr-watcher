@@ -59,7 +59,7 @@
       },
       "patch": {
         "operationId": "updateQuery",
-        "summary": "Partially update a query (enabled, cron, or excludedIndexers)",
+        "summary": "Partially update a query (enabled, cron, note, or excludedIndexers)",
         "requestBody": {
           "required": true,
           "content": {
@@ -313,7 +313,8 @@
           "lastCount",
           "lastError",
           "lastNewResult",
-          "excludedIndexers"
+          "excludedIndexers",
+          "note"
         ],
         "properties": {
           "id": { "type": "integer" },
@@ -331,6 +332,10 @@
             "description": "null means: inherit the default exclusion list from Settings",
             "type": ["array", "null"],
             "items": { "type": "integer" }
+          },
+          "note": {
+            "description": "Optional note shown as the first line of new-result notifications",
+            "type": ["string", "null"]
           }
         }
       },
@@ -396,7 +401,8 @@
         "properties": {
           "query": { "type": "string" },
           "name": { "type": "string" },
-          "cron": { "type": "string" }
+          "cron": { "type": "string" },
+          "note": { "type": "string" }
         }
       },
       "UpdateQueryRequest": {
@@ -404,7 +410,8 @@
         "properties": {
           "enabled": { "type": "boolean" },
           "cron": { "type": ["string", "null"] },
-          "excludedIndexers": { "type": ["array", "null"], "items": { "type": "integer" } }
+          "excludedIndexers": { "type": ["array", "null"], "items": { "type": "integer" } },
+          "note": { "type": ["string", "null"] }
         }
       },
       "Job": {

@@ -11,7 +11,7 @@ from prowlarr import format_size, prowlarr_link_base
 log = logging.getLogger("prowlarr-watcher")
 
 
-def notify_new_results(name: str, query: str, new_items: list[dict]):
+def notify_new_results(name: str, query: str, new_items: list[dict], note: str | None = None):
     raw_urls = get_setting("apprise_urls", "")
     urls = [u.strip() for u in raw_urls.splitlines() if u.strip()]
     if not urls:
@@ -30,6 +30,8 @@ def notify_new_results(name: str, query: str, new_items: list[dict]):
     prowlarr_base = prowlarr_link_base()
     if prowlarr_base:
         body = f"🔍 {prowlarr_base}/search?query={quote(query)}\n\n{body}"
+    if note:
+        body = f"{note}\n\n{body}"
 
     ap = apprise.Apprise()
     for u in urls:

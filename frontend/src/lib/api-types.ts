@@ -39,7 +39,7 @@ export interface paths {
     delete: operations["deleteQuery"];
     options?: never;
     head?: never;
-    /** Partially update a query (enabled, cron, or excludedIndexers) */
+    /** Partially update a query (enabled, cron, note, or excludedIndexers) */
     patch: operations["updateQuery"];
     trace?: never;
   };
@@ -206,6 +206,8 @@ export interface components {
       lastNewResult: string | null;
       /** @description null means: inherit the default exclusion list from Settings */
       excludedIndexers: number[] | null;
+      /** @description Optional note shown as the first line of new-result notifications */
+      note: string | null;
     };
     QueryDetail: components["schemas"]["Query"] & {
       results: components["schemas"]["Result"][];
@@ -237,11 +239,13 @@ export interface components {
       query: string;
       name?: string;
       cron?: string;
+      note?: string;
     };
     UpdateQueryRequest: {
       enabled?: boolean;
       cron?: string | null;
       excludedIndexers?: number[] | null;
+      note?: string | null;
     };
     Job: {
       /** @enum {string} */

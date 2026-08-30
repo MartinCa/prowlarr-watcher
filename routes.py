@@ -103,6 +103,7 @@ def _serialize_query(row: sqlite3.Row) -> dict:
         "lastError": row["last_error"],
         "lastNewResult": row["last_new_result"],
         "excludedIndexers": None if excluded is None else parse_indexer_ids(excluded),
+        "note": row["note"],
     }
 
 
@@ -168,6 +169,7 @@ def create_query():
         return problem(400, "Validation failed", errors={"query": ["Query is required"]})
     name = str(body.get("name") or "").strip() or query_text
     cron = str(body.get("cron") or "").strip() or None
+    note = str(body.get("note") or "").strip() or None
 
     now_iso = datetime.now(timezone.utc).isoformat()
     cron_expr = cron or get_setting("default_cron", "0 * * * *")
@@ -177,8 +179,9 @@ def create_query():
 
     with _db_lock, get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO queries (name, query, cron, created_at, next_run) VALUES (?,?,?,?,?)",
-            (name, query_text, cron, now_iso, next_iso),
+            "INSERT INTO queries (name, query, cron, created_at, next_run, note)"
+            " VALUES (?,?,?,?,?,?)",
+            (name, query_text, cron, now_iso, next_iso, note),
         )
         qid = cur.lastrowid
         conn.commit()
@@ -234,6 +237,12 @@ def update_query(qid: int):
             conn.execute("UPDATE queries SET cron=?, next_run=? WHERE id=?", (cron, next_iso, qid))
             conn.commit()
         scheduler.poke()
+
+    if "note" in body:
+        note = str(body["note"] or "").strip() or None
+        with _db_lock, get_db() as conn:
+            conn.execute("UPDATE queries SET note=? WHERE id=?", (note, qid))
+            conn.commit()
 
     if "excludedIndexers" in body:
         excluded = body["excludedIndexers"]
