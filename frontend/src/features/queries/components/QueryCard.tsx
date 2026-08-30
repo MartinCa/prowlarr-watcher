@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Pause, Play, Trash2 } from "lucide-react";
+import { CirclePlay, Pause, Play, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { QueryStatusBadge } from "@/features/queries/components/QueryStatusBadge";
@@ -70,7 +70,7 @@ export function QueryCard({
           title={query.enabled ? "Pause" : "Resume"}
           onClick={() => updateQuery.mutate({ enabled: !query.enabled })}
         >
-          {query.enabled ? <Pause className="size-4" /> : <Play className="size-4" />}
+          {query.enabled ? <Pause className="size-4" /> : <CirclePlay className="size-4" />}
         </Button>
         <Button variant="ghost" size="icon" title="Delete" onClick={handleDelete}>
           <Trash2 className="text-destructive size-4" />
