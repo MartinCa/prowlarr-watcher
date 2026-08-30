@@ -677,6 +677,27 @@ class TestProcessQueryResult:
         assert q["last_run"] is not None
         assert q["last_count"] == 2
 
+    def test_sets_last_new_result_when_new_items_found(self):
+        qid = _insert_query()
+        job = worker.Job(status="done", result=SAMPLE_RESULTS)
+        callbacks.process_query_result(qid, "0 * * * *", job)
+
+        with db.get_db() as conn:
+            q = conn.execute("SELECT last_new_result FROM queries WHERE id=?", (qid,)).fetchone()
+        assert q["last_new_result"] is not None
+
+    def test_last_new_result_unchanged_when_no_new_items(self):
+        qid = _insert_query()
+        for r in SAMPLE_RESULTS:
+            _insert_result(qid, title=r["title"], guid=r["guid"])
+
+        job = worker.Job(status="done", result=SAMPLE_RESULTS)
+        callbacks.process_query_result(qid, "0 * * * *", job)
+
+        with db.get_db() as conn:
+            q = conn.execute("SELECT last_new_result FROM queries WHERE id=?", (qid,)).fetchone()
+        assert q["last_new_result"] is None
+
     def test_error_job_updates_timestamps(self):
         qid = _insert_query()
         job = worker.Job(status="error", error="connection refused")
@@ -920,6 +941,31 @@ class TestListQueries:
         data = resp.get_json()
         assert len(data) == 1
         assert data[0]["name"] == "Ubuntu Watch"
+
+    def test_orders_by_last_new_result_then_never_by_id(self, client):
+        # No new results yet: falls back to id desc (newest created first).
+        _insert_query(name="Never Older")
+        _insert_query(name="Never Newer")
+        # Has new results, but longer ago than "Recent".
+        stale = _insert_query(name="Stale")
+        # Has the most recent new results: should sort first.
+        recent = _insert_query(name="Recent")
+
+        with db._db_lock, db.get_db() as conn:
+            conn.execute(
+                "UPDATE queries SET last_new_result=? WHERE id=?",
+                ("2020-01-01T00:00:00+00:00", stale),
+            )
+            conn.execute(
+                "UPDATE queries SET last_new_result=? WHERE id=?",
+                ("2024-01-01T00:00:00+00:00", recent),
+            )
+            conn.commit()
+
+        resp = client.get("/api/queries")
+        assert resp.status_code == 200
+        names = [q["name"] for q in resp.get_json()]
+        assert names == ["Recent", "Stale", "Never Newer", "Never Older"]
 
 
 class TestGetQuery:

@@ -42,7 +42,8 @@ def init_db():
                 next_run           TEXT,
                 last_count         INTEGER DEFAULT 0,
                 last_error         TEXT,
-                excluded_indexers  TEXT
+                excluded_indexers  TEXT,
+                last_new_result    TEXT
             );
 
             CREATE TABLE IF NOT EXISTS results (
@@ -80,6 +81,9 @@ def init_db():
             conn.commit()
         if "excluded_indexers" not in cols:
             conn.execute("ALTER TABLE queries ADD COLUMN excluded_indexers TEXT")
+            conn.commit()
+        if "last_new_result" not in cols:
+            conn.execute("ALTER TABLE queries ADD COLUMN last_new_result TEXT")
             conn.commit()
 
 

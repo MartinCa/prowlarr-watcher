@@ -68,10 +68,17 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
                 new_items.append(r)
                 _insert_result(conn, qid, r, 1, now_iso)
 
-        conn.execute(
-            "UPDATE queries SET last_run=?, last_count=?, last_error=NULL WHERE id=?",
-            (now_iso, len(raw), qid),
-        )
+        if new_items:
+            conn.execute(
+                "UPDATE queries SET last_run=?, last_count=?, last_error=NULL,"
+                " last_new_result=? WHERE id=?",
+                (now_iso, len(raw), now_iso, qid),
+            )
+        else:
+            conn.execute(
+                "UPDATE queries SET last_run=?, last_count=?, last_error=NULL WHERE id=?",
+                (now_iso, len(raw), qid),
+            )
         conn.commit()
 
     log.info("[Q%d] %d total / %d new", qid, len(raw), len(new_items))

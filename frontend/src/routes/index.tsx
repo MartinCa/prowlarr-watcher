@@ -39,7 +39,6 @@ function QueryListPage() {
             <QueryCard
               key={q.id}
               query={q}
-              defaultCron={defaultCron}
               queueState={queueStatus.data?.queries[String(q.id)]}
             />
           ))}

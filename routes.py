@@ -101,6 +101,7 @@ def _serialize_query(row: sqlite3.Row) -> dict:
         "nextRun": row["next_run"],
         "lastCount": row["last_count"],
         "lastError": row["last_error"],
+        "lastNewResult": row["last_new_result"],
         "excludedIndexers": None if excluded is None else parse_indexer_ids(excluded),
     }
 
@@ -153,7 +154,9 @@ def _serialize_settings() -> dict:
 @bp.route("/queries", methods=["GET"])
 def list_queries():
     with get_db() as conn:
-        rows = conn.execute("SELECT * FROM queries ORDER BY id DESC").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM queries ORDER BY last_new_result IS NULL, last_new_result DESC, id DESC"
+        ).fetchall()
     return jsonify([_serialize_query(r) for r in rows])
 
 

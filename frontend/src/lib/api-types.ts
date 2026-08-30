@@ -202,6 +202,8 @@ export interface components {
       nextRun: string | null;
       lastCount: number | null;
       lastError: string | null;
+      /** Format: date-time */
+      lastNewResult: string | null;
       /** @description null means: inherit the default exclusion list from Settings */
       excludedIndexers: number[] | null;
     };
