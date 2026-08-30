@@ -30,9 +30,11 @@ inline `style` props, no fetching inside a Zustand store. If a rule fires,
 fix the code rather than disabling the rule. If the rule is genuinely wrong,
 say so and change it upstream in `@martinca/frontend-config`.
 
+- `typescript` is pinned to `6.0.3` (`<7.0.0`) because `typescript-eslint` v8 does not support TypeScript 7.0 yet (tracking: https://github.com/typescript-eslint/typescript-eslint/issues/10940).
+
 ## Do not
 
 - Add a state, data-fetching, or UI library. The stack is decided in `DESIGN.md`.
-- Hand-edit `src/components/ui/**` or `src/lib/api-types.ts`. Both are vendored.
+- Hand-edit `src/components/ui/**`, `src/lib/api-types.ts`, or `src/routeTree.gen.ts`. All are vendored / generated.
 - Refactor files unrelated to the task in hand.
 - Write a response interface by hand. Regenerate from the OpenAPI spec.
