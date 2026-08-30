@@ -10,11 +10,9 @@ import type { Query } from "@/lib/types";
 
 export function QueryCard({
   query,
-  defaultCron,
   queueState,
 }: {
   query: Query;
-  defaultCron: string;
   queueState: "queued" | "running" | undefined;
 }) {
   const updateQuery = useUpdateQuery(query.id);
@@ -49,12 +47,7 @@ export function QueryCard({
           <span>
             query: <span className="text-foreground">{query.query}</span>
           </span>
-          <span>
-            cron: {query.cron || defaultCron}
-            {!query.cron && <span className="ml-1">(default)</span>}
-          </span>
-          <span>last run: {formatRelativeTime(query.lastRun)}</span>
-          {query.enabled && query.nextRun && <span>next: {formatRelativeTime(query.nextRun)}</span>}
+          <span>last new results: {formatRelativeTime(query.lastNewResult)}</span>
           {query.lastCount != null && <span>{query.lastCount} results</span>}
         </div>
       </div>

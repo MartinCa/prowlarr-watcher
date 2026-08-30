@@ -312,6 +312,7 @@
           "nextRun",
           "lastCount",
           "lastError",
+          "lastNewResult",
           "excludedIndexers"
         ],
         "properties": {
@@ -325,6 +326,7 @@
           "nextRun": { "type": ["string", "null"], "format": "date-time" },
           "lastCount": { "type": ["integer", "null"] },
           "lastError": { "type": ["string", "null"] },
+          "lastNewResult": { "type": ["string", "null"], "format": "date-time" },
           "excludedIndexers": {
             "description": "null means: inherit the default exclusion list from Settings",
             "type": ["array", "null"],
