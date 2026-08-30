@@ -43,7 +43,8 @@ def init_db():
                 last_count         INTEGER DEFAULT 0,
                 last_error         TEXT,
                 excluded_indexers  TEXT,
-                last_new_result    TEXT
+                last_new_result    TEXT,
+                note               TEXT
             );
 
             CREATE TABLE IF NOT EXISTS results (
@@ -84,6 +85,9 @@ def init_db():
             conn.commit()
         if "last_new_result" not in cols:
             conn.execute("ALTER TABLE queries ADD COLUMN last_new_result TEXT")
+            conn.commit()
+        if "note" not in cols:
+            conn.execute("ALTER TABLE queries ADD COLUMN note TEXT")
             conn.commit()
 
 

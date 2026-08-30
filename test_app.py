@@ -79,16 +79,16 @@ def _configure_prowlarr():
     db.set_setting("prowlarr_api_key", "test-key-123")
 
 
-def _insert_query(name="Test", query="ubuntu", cron=None, enabled=1):
+def _insert_query(name="Test", query="ubuntu", cron=None, enabled=1, note=None):
     """Insert a query directly into the DB and return its id."""
     now = datetime.now(timezone.utc).isoformat()
     next_iso = scheduler_mod.Scheduler.compute_next(cron or "0 * * * *")
     with db._db_lock, db.get_db() as conn:
         cur = conn.execute(
             "INSERT INTO queries (name, query, cron, enabled,"
-            " created_at, last_run, next_run, last_count)"
-            " VALUES (?,?,?,?,?,?,?,0)",
-            (name, query, cron, enabled, now, now, next_iso),
+            " created_at, last_run, next_run, last_count, note)"
+            " VALUES (?,?,?,?,?,?,?,0,?)",
+            (name, query, cron, enabled, now, now, next_iso, note),
         )
         conn.commit()
         return cur.lastrowid
@@ -724,6 +724,16 @@ class TestProcessQueryResult:
         assert len(call_args[2]) == 2
 
     @patch("callbacks.notify_new_results")
+    def test_notifies_with_note(self, mock_notify):
+        qid = _insert_query(name="MyQuery", query="ubuntu", note="Only remastered releases")
+        job = worker.Job(status="done", result=SAMPLE_RESULTS)
+        callbacks.process_query_result(qid, "0 * * * *", job)
+
+        mock_notify.assert_called_once()
+        call_args = mock_notify.call_args[0]
+        assert call_args[3] == "Only remastered releases"
+
+    @patch("callbacks.notify_new_results")
     def test_no_notification_when_no_new_results(self, mock_notify):
         qid = _insert_query()
         # Pre-insert all results
@@ -889,6 +899,17 @@ class TestNotify:
         assert "1 new result " in title  # no trailing 's'
 
     @patch("notifications.apprise.Apprise")
+    def test_note_is_first_line_of_body(self, mock_apprise_cls):
+        db.set_setting("apprise_urls", "json://localhost/test")
+        mock_ap = MagicMock()
+        mock_apprise_cls.return_value = mock_ap
+
+        notifications.notify_new_results("Q", "q", SAMPLE_RESULTS, "Only remastered releases")
+
+        body = mock_ap.notify.call_args.kwargs["body"]
+        assert body.startswith("Only remastered releases\n")
+
+    @patch("notifications.apprise.Apprise")
     def test_truncates_at_20(self, mock_apprise_cls):
         db.set_setting("apprise_urls", "json://localhost/test")
         mock_ap = MagicMock()
@@ -1028,6 +1049,18 @@ class TestCreateQuery:
             q = conn.execute("SELECT cron FROM queries WHERE name='Cron Test'").fetchone()
         assert q["cron"] == "*/5 * * * *"
 
+    @patch.object(worker.work_queue, "submit")
+    def test_create_with_note(self, mock_submit, client):
+        mock_submit.return_value = worker.Job()
+        resp = post_json(
+            client, "/api/queries", {"query": "fedora", "note": "Only stable releases"}
+        )
+        assert resp.get_json()["note"] == "Only stable releases"
+
+        with db.get_db() as conn:
+            q = conn.execute("SELECT note FROM queries WHERE query='fedora'").fetchone()
+        assert q["note"] == "Only stable releases"
+
     def test_missing_fields(self, client):
         resp = post_json(client, "/api/queries", {"name": "", "query": ""})
         assert resp.status_code == 400
@@ -1109,6 +1142,20 @@ class TestUpdateQuery:
 
         data = client.get(f"/api/queries/{qid}").get_json()
         assert data["excludedIndexers"] is None
+
+    def test_update_note(self, client):
+        qid = _insert_query()
+        patch_json(client, f"/api/queries/{qid}", {"note": "Only stable releases"})
+
+        data = client.get(f"/api/queries/{qid}").get_json()
+        assert data["note"] == "Only stable releases"
+
+    def test_clear_note(self, client):
+        qid = _insert_query(note="Old note")
+        patch_json(client, f"/api/queries/{qid}", {"note": None})
+
+        data = client.get(f"/api/queries/{qid}").get_json()
+        assert data["note"] is None
 
     def test_update_nonexistent(self, client):
         resp = patch_json(client, "/api/queries/9999", {"enabled": False})

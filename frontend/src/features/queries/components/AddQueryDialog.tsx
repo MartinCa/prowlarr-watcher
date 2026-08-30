@@ -21,6 +21,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
   const [queryText, setQueryText] = useState("");
   const [name, setName] = useState("");
   const [cron, setCron] = useState("");
+  const [note, setNote] = useState("");
   const [jobId, setJobId] = useState<string>();
 
   const searchPreview = useSearchPreview();
@@ -31,6 +32,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
     setQueryText("");
     setName("");
     setCron("");
+    setNote("");
     setJobId(undefined);
   }
 
@@ -44,7 +46,12 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     createQuery.mutate(
-      { query: queryText.trim(), name: name.trim() || undefined, cron: cron.trim() || undefined },
+      {
+        query: queryText.trim(),
+        name: name.trim() || undefined,
+        cron: cron.trim() || undefined,
+        note: note.trim() || undefined,
+      },
       {
         onSuccess: () => {
           setOpen(false);
@@ -100,6 +107,19 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Ubuntu ISOs"
             />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="query-note">Note (optional)</Label>
+            <Input
+              id="query-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. Only the remastered release"
+            />
+            <p className="text-muted-foreground text-xs">
+              Shown as the first line of new-result notifications for this query.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">

@@ -33,6 +33,7 @@ function QueryDetailPage() {
   const [cronInput, setCronInput] = useState<string>();
   const [overrideEnabled, setOverrideEnabled] = useState<boolean>();
   const [excludedDraft, setExcludedDraft] = useState<number[]>();
+  const [noteInput, setNoteInput] = useState<string>();
 
   if (detail.isPending || settings.isPending) {
     return <p className="text-muted-foreground text-sm">Loading…</p>;
@@ -52,6 +53,7 @@ function QueryDetailPage() {
   const cron = cronInput ?? query.cron ?? "";
   const override = overrideEnabled ?? query.excludedIndexers !== null;
   const excluded = excludedDraft ?? query.excludedIndexers ?? [];
+  const note = noteInput ?? query.note ?? "";
   const newCount = query.results.filter((r) => r.isNew).length;
 
   function handleDelete() {
@@ -65,6 +67,16 @@ function QueryDetailPage() {
       {
         onSuccess: () => toast.success("Schedule saved"),
         onError: () => toast.error("Failed to save schedule"),
+      },
+    );
+  }
+
+  function saveNote() {
+    updateQuery.mutate(
+      { note: noteInput?.trim() || null },
+      {
+        onSuccess: () => toast.success("Note saved"),
+        onError: () => toast.error("Failed to save note"),
       },
     );
   }
@@ -169,6 +181,23 @@ function QueryDetailPage() {
           >
             crontab.guru
           </a>
+        </p>
+      </Card>
+
+      <Card className="flex flex-col gap-3 p-5">
+        <h2 className="text-muted-foreground font-mono text-xs uppercase">Note</h2>
+        <div className="flex items-center gap-2">
+          <Input
+            value={note}
+            placeholder="e.g. Only the remastered release"
+            onChange={(e) => setNoteInput(e.target.value)}
+          />
+          <Button size="sm" variant="outline" onClick={saveNote}>
+            Save
+          </Button>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          Shown as the first line of new-result notifications for this query.
         </p>
       </Card>
 
