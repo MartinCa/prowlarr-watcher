@@ -19,31 +19,35 @@ function seederColor(seeders: number | null | undefined): string {
 
 export function ResultsTable({ results }: { results: PreviewResult[] }) {
   if (results.length === 0) {
-    return <p className="text-muted-foreground text-sm">No results found for this query.</p>;
+    return <p className="text-muted-foreground p-3 text-sm">No results found for this query.</p>;
   }
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Title</TableHead>
-          <TableHead>Indexer</TableHead>
-          <TableHead>Size</TableHead>
-          <TableHead>Seeds</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {results.map((r, i) => (
-          <TableRow key={r.guid ?? i}>
-            <TableCell className="max-w-96 truncate">{r.title ?? "—"}</TableCell>
-            <TableCell>
-              <Badge variant="outline">{r.indexer ?? "—"}</Badge>
-            </TableCell>
-            <TableCell className="font-mono whitespace-nowrap">{formatSize(r.size)}</TableCell>
-            <TableCell className={seederColor(r.seeders)}>{r.seeders ?? "—"}</TableCell>
+    <div className="preview-table">
+      <Table>
+        <TableHeader className="bg-popover sticky top-0 z-10">
+          <TableRow>
+            <TableHead className="bg-popover">Title</TableHead>
+            <TableHead className="bg-popover">Indexer</TableHead>
+            <TableHead className="bg-popover">Size</TableHead>
+            <TableHead className="bg-popover">Seeds</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {results.map((r, i) => (
+            <TableRow key={r.guid ?? i}>
+              <TableCell className="max-w-96 truncate" title={r.title ?? undefined}>
+                {r.title ?? "—"}
+              </TableCell>
+              <TableCell>
+                <Badge variant="outline">{r.indexer ?? "—"}</Badge>
+              </TableCell>
+              <TableCell className="font-mono whitespace-nowrap">{formatSize(r.size)}</TableCell>
+              <TableCell className={seederColor(r.seeders)}>{r.seeders ?? "—"}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
