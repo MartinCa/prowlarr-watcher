@@ -2,8 +2,6 @@ services:
   prowlarr-watcher:
     build:
       context: .
-      secrets:
-        - github_packages_token
     container_name: prowlarr-watcher
     restart: unless-stopped
     ports:
@@ -20,6 +18,3 @@ services:
 #   arr-network:
 #     external: true
 
-secrets:
-  github_packages_token:
-    environment: GITHUB_PACKAGES_TOKEN

@@ -47,6 +47,9 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
     if (!queryText.trim()) return;
     searchPreview.mutate(queryText.trim(), {
       onSuccess: (data) => setJobId(data.jobId),
+      onError: (error) => {
+        toast.error(error instanceof ApiError ? error.message : "Failed to start preview search");
+      },
     });
   }
 

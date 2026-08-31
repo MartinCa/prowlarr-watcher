@@ -39,7 +39,10 @@ class Scheduler:
         startup = True
         while not self._stop.is_set():
             self._wakeup.clear()
-            self._tick(startup=startup)
+            try:
+                self._tick(startup=startup)
+            except Exception:
+                log.exception("Unexpected error in scheduler tick loop")
             startup = False
             self._wakeup.wait(timeout=30)
 
@@ -59,33 +62,65 @@ class Scheduler:
             qid = row["id"]
             cron_expr = row["cron"] or get_setting("default_cron", "0 * * * *")
 
-            next_run_iso = row["next_run"]
-            if not next_run_iso:
-                next_run_iso = self.compute_next(cron_expr)
-                with _db_lock, get_db() as conn:
-                    conn.execute("UPDATE queries SET next_run=? WHERE id=?", (next_run_iso, qid))
-                    conn.commit()
+            try:
+                next_run_iso = row["next_run"]
+                if not next_run_iso:
+                    next_run_iso = self.compute_next(cron_expr)
+                    with _db_lock, get_db() as conn:
+                        conn.execute(
+                            "UPDATE queries SET next_run=? WHERE id=?", (next_run_iso, qid)
+                        )
+                        conn.commit()
 
-            next_run_ts = datetime.fromisoformat(next_run_iso).timestamp()
-            if now_ts >= next_run_ts:
-                if startup:
-                    log.info(
-                        "  Overdue: query %d %r due %s — queuing", qid, row["query"], next_run_iso
+                try:
+                    next_run_ts = datetime.fromisoformat(next_run_iso).timestamp()
+                except Exception:
+                    log.warning(
+                        "Corrupted next_run timestamp %r for query %d, recalculating",
+                        next_run_iso,
+                        qid,
                     )
-                next_iso = self.compute_next(cron_expr)
-                with _db_lock, get_db() as conn:
-                    conn.execute("UPDATE queries SET next_run=? WHERE id=?", (next_iso, qid))
-                    conn.commit()
+                    next_run_iso = self.compute_next(cron_expr)
+                    next_run_ts = datetime.fromisoformat(next_run_iso).timestamp()
+                    with _db_lock, get_db() as conn:
+                        conn.execute(
+                            "UPDATE queries SET next_run=? WHERE id=?", (next_run_iso, qid)
+                        )
+                        conn.commit()
 
-                work_queue.submit(
-                    query=row["query"],
-                    excluded_indexers=effective_excluded_indexers(row["excluded_indexers"]),
-                    label=f"q:{qid}",
-                    priority=Priority.LOW,
-                    callback=lambda job, _qid=qid, _cron=cron_expr: process_query_result(
-                        _qid, _cron, job
-                    ),
-                )
+                if now_ts >= next_run_ts:
+                    if startup:
+                        log.info(
+                            "  Overdue: query %d %r due %s — queuing",
+                            qid,
+                            row["query"],
+                            next_run_iso,
+                        )
+                    next_iso = self.compute_next(cron_expr)
+                    with _db_lock, get_db() as conn:
+                        conn.execute("UPDATE queries SET next_run=? WHERE id=?", (next_iso, qid))
+                        conn.commit()
+
+                    work_queue.submit(
+                        query=row["query"],
+                        excluded_indexers=effective_excluded_indexers(row["excluded_indexers"]),
+                        label=f"q:{qid}",
+                        priority=Priority.LOW,
+                        callback=lambda job, _qid=qid, _cron=cron_expr: process_query_result(
+                            _qid, _cron, job
+                        ),
+                    )
+            except Exception as exc:
+                log.exception("Failed to process query %d in scheduler tick", qid)
+                try:
+                    with _db_lock, get_db() as conn:
+                        conn.execute(
+                            "UPDATE queries SET last_error=? WHERE id=?",
+                            (f"{type(exc).__name__}: {exc}", qid),
+                        )
+                        conn.commit()
+                except Exception:
+                    log.exception("Failed to record scheduler error for query %d", qid)
 
     @staticmethod
     def compute_next(cron_expr: str) -> str:

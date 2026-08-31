@@ -37,3 +37,26 @@ export function cronGuruUrl(expr: string): string {
 export function prowlarrLinkBase(settings: { prowlarrUrl: string; prowlarrExternalUrl: string }) {
   return (settings.prowlarrExternalUrl || settings.prowlarrUrl).replace(/\/$/, "");
 }
+
+/**
+ * Sanitizes URLs from external / untrusted sources.
+ * Only allows http:, https:, and magnet: protocols.
+ * Rejects javascript:, data:, relative URLs, or malformed strings.
+ */
+export function sanitizeUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.protocol === "http:" ||
+      parsed.protocol === "https:" ||
+      parsed.protocol === "magnet:"
+    ) {
+      return url;
+    }
+  } catch {
+    // Malformed URL
+  }
+  return null;
+}
+

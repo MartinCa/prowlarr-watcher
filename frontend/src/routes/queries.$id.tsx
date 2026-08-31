@@ -17,7 +17,13 @@ import {
 } from "@/features/queries/hooks";
 import { useSettings } from "@/features/settings/hooks";
 import { ApiError } from "@/lib/api";
-import { cronGuruUrl, describeCron, formatRelativeTime, prowlarrLinkBase } from "@/lib/format";
+import {
+  cronGuruUrl,
+  describeCron,
+  formatRelativeTime,
+  prowlarrLinkBase,
+  sanitizeUrl,
+} from "@/lib/format";
 
 export const Route = createFileRoute("/queries/$id")({ component: QueryDetailPage });
 
@@ -104,11 +110,11 @@ function QueryDetailPage() {
       <Card className="flex flex-row flex-wrap items-start gap-8 p-5">
         <Field label="Search query">
           <code className="text-sm">{query.query}</code>
-          {prowlarrBase && (
+          {prowlarrBase && sanitizeUrl(`${prowlarrBase}/search?query=${encodeURIComponent(query.query)}`) && (
             <a
-              href={`${prowlarrBase}/search?query=${encodeURIComponent(query.query)}`}
+              href={sanitizeUrl(`${prowlarrBase}/search?query=${encodeURIComponent(query.query)}`)!}
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
               title="Search in Prowlarr"
               className="text-muted-foreground ml-2 text-xs hover:underline"
             >

@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatRelativeTime, formatSize } from "@/lib/format";
+import { formatRelativeTime, formatSize, sanitizeUrl } from "@/lib/format";
 import type { PreviewResult, Result } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -79,44 +79,56 @@ export function StoredResultsTable({ results }: { results: Result[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {results.map((r) => (
-          <TableRow key={r.id} className={r.isNew ? "border-l-primary border-l-2" : undefined}>
-            <TableCell>
-              {r.isNew && (
-                <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
-                  New
-                </Badge>
-              )}
-            </TableCell>
-            <TableCell className="max-w-96 truncate">
-              {r.infoUrl ? (
-                <a href={r.infoUrl} target="_blank" rel="noopener" className="hover:underline">
-                  {r.title ?? "—"}
-                </a>
-              ) : (
-                (r.title ?? "—")
-              )}
-              {r.downloadUrl && (
-                <a
-                  href={r.downloadUrl}
-                  target="_blank"
-                  rel="noopener"
-                  className="text-muted-foreground ml-2 text-xs hover:underline"
-                >
-                  ↓
-                </a>
-              )}
-            </TableCell>
-            <TableCell>
-              <Badge variant="outline">{r.indexer ?? "—"}</Badge>
-            </TableCell>
-            <TableCell className="font-mono whitespace-nowrap">{formatSize(r.size)}</TableCell>
-            <TableCell className={seederColor(r.seeders)}>{r.seeders ?? "—"}</TableCell>
-            <TableCell className="text-muted-foreground font-mono text-xs whitespace-nowrap">
-              {formatRelativeTime(r.firstSeen)}
-            </TableCell>
-          </TableRow>
-        ))}
+        {results.map((r) => {
+          const safeInfoUrl = sanitizeUrl(r.infoUrl);
+          const safeDownloadUrl = sanitizeUrl(r.downloadUrl);
+          return (
+            <TableRow key={r.id} className={r.isNew ? "border-l-primary border-l-2" : undefined}>
+              <TableCell>
+                {r.isNew && (
+                  <Badge
+                    variant="outline"
+                    className="border-primary/40 bg-primary/10 text-primary"
+                  >
+                    New
+                  </Badge>
+                )}
+              </TableCell>
+              <TableCell className="max-w-96 truncate">
+                {safeInfoUrl ? (
+                  <a
+                    href={safeInfoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                  >
+                    {r.title ?? "—"}
+                  </a>
+                ) : (
+                  (r.title ?? "—")
+                )}
+                {safeDownloadUrl && (
+                  <a
+                    href={safeDownloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground ml-2 text-xs hover:underline"
+                  >
+                    ↓
+                  </a>
+                )}
+              </TableCell>
+              <TableCell>
+                <Badge variant="outline">{r.indexer ?? "—"}</Badge>
+              </TableCell>
+              <TableCell className="font-mono whitespace-nowrap">{formatSize(r.size)}</TableCell>
+              <TableCell className={seederColor(r.seeders)}>{r.seeders ?? "—"}</TableCell>
+              <TableCell className="text-muted-foreground font-mono text-xs whitespace-nowrap">
+                {formatRelativeTime(r.firstSeen)}
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
