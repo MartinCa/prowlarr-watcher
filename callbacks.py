@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from db import _db_lock, get_db
 from notifications import notify_error, notify_new_results
-from prowlarr import hash_result
+from prowlarr import hash_result, sanitize_url
 from worker import Job
 
 log = logging.getLogger("prowlarr-watcher")
@@ -24,8 +24,8 @@ def _insert_result(conn, qid: int, r: dict, is_new: int, now_iso: str):
             r.get("indexer"),
             r.get("size"),
             r.get("guid"),
-            r.get("infoUrl"),
-            r.get("downloadUrl"),
+            sanitize_url(r.get("infoUrl")),
+            sanitize_url(r.get("downloadUrl")),
             r.get("seeders"),
             now_iso,
             is_new,

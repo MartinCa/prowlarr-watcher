@@ -12,14 +12,10 @@ The web UI has no authentication by design — it is intended to run on a truste
 
 - Docker and Docker Compose
 - A running Prowlarr instance with at least one indexer configured
-- A GitHub personal access token with `read:packages` scope, exported as
-  `GITHUB_PACKAGES_TOKEN` — the image build pulls `@martinca/frontend-config`
-  from GitHub Packages while building the frontend
 
 ## Running
 
 ```bash
-export GITHUB_PACKAGES_TOKEN=ghp_...
 docker compose up -d --build
 ```
 

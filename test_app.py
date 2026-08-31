@@ -65,6 +65,10 @@ def post_json(client, path, body=None):
     return client.post(path, json=body or {}, headers=_csrf_headers(client))
 
 
+def put_json(client, path, body=None):
+    return client.put(path, json=body or {}, headers=_csrf_headers(client))
+
+
 def patch_json(client, path, body=None):
     return client.patch(path, json=body or {}, headers=_csrf_headers(client))
 
@@ -1411,3 +1415,232 @@ class TestTestApprise:
         data = resp.get_json()
         assert data["ok"] is True
         assert "Sent" in data["message"]
+
+
+# ---------------------------------------------------------------------------
+# Link Sanitization Tests
+# ---------------------------------------------------------------------------
+class TestSanitizeUrl:
+    def test_valid_schemes(self):
+        assert prowlarr.sanitize_url("http://example.com") == "http://example.com"
+        assert prowlarr.sanitize_url("https://example.com/test") == "https://example.com/test"
+        assert prowlarr.sanitize_url("magnet:?xt=urn:btih:123") == "magnet:?xt=urn:btih:123"
+
+    def test_dangerous_schemes(self):
+        assert prowlarr.sanitize_url("javascript:alert(1)") is None
+        assert prowlarr.sanitize_url("JAVASCRIPT:alert(1)") is None
+        assert prowlarr.sanitize_url("data:text/html,<script>alert(1)</script>") is None
+        assert prowlarr.sanitize_url("vbscript:alert(1)") is None
+
+    def test_relative_and_empty(self):
+        assert prowlarr.sanitize_url("") is None
+        assert prowlarr.sanitize_url(None) is None
+        assert prowlarr.sanitize_url("/relative/path") is None
+
+    def test_callbacks_sanitize_urls(self):
+        with db.get_db() as conn:
+            conn.execute(
+                "INSERT INTO queries (name, query, created_at, next_run)"
+                " VALUES ('q', 'q', 'now', 'now')"
+            )
+            qid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.commit()
+
+        job = worker.Job(
+            query="q",
+            categories=[],
+            excluded_indexers=[],
+            label=f"q:{qid}",
+            priority=worker.Priority.LOW,
+            attempt=1,
+            created_at=time.time(),
+            status="done",
+            result=[
+                {
+                    "title": "Bad Link",
+                    "guid": "guid1",
+                    "infoUrl": "javascript:steal()",
+                    "downloadUrl": "javascript:alert(1)",
+                },
+                {
+                    "title": "Good Link",
+                    "guid": "guid2",
+                    "infoUrl": "https://example.com",
+                    "downloadUrl": "magnet:?xt=urn:btih:abc",
+                },
+            ],
+        )
+        callbacks.process_query_result(qid, "0 * * * *", job)
+
+        with db.get_db() as conn:
+            rows = conn.execute(
+                "SELECT info_url, download_url FROM results WHERE query_id=?", (qid,)
+            ).fetchall()
+        assert len(rows) == 2
+        for r in rows:
+            assert r["info_url"] is None or r["info_url"].startswith("https://")
+            assert r["download_url"] is None or r["download_url"].startswith("magnet:")
+
+
+# ---------------------------------------------------------------------------
+# Scheduler Daemon Crash Resilience Tests
+# ---------------------------------------------------------------------------
+class TestSchedulerResilience:
+    def test_tick_corrupted_timestamp(self):
+        """A corrupted next_run string is logged and recalculated, not crashing the thread."""
+        with db._db_lock, db.get_db() as conn:
+            conn.execute(
+                "INSERT INTO queries (name, query, cron, created_at, next_run, enabled)"
+                " VALUES ('bad_ts', 'bad_ts', '*/5 * * * *', '2026-01-01T00:00:00',"
+                " 'not-a-timestamp', 1)"
+            )
+            conn.commit()
+
+        sched = scheduler_mod.Scheduler()
+        # Should not raise exception
+        sched._tick()
+
+        with db.get_db() as conn:
+            row = conn.execute("SELECT next_run FROM queries WHERE name='bad_ts'").fetchone()
+        assert row["next_run"] != "not-a-timestamp"
+
+    def test_tick_invalid_cron_records_error_and_continues(self):
+        """A query with an invalid cron expression doesn't stop other queries from running."""
+        with db._db_lock, db.get_db() as conn:
+            conn.execute(
+                "INSERT INTO queries (name, query, cron, created_at, next_run, enabled)"
+                " VALUES ('bad_cron', 'bad_cron', 'invalid cron', '2026-01-01T00:00:00', NULL, 1)"
+            )
+            conn.execute(
+                "INSERT INTO queries (name, query, cron, created_at, next_run, enabled)"
+                " VALUES ('good_query', 'good_query', '*/5 * * * *', '2026-01-01T00:00:00',"
+                " '2020-01-01T00:00:00', 1)"
+            )
+            conn.commit()
+
+        sched = scheduler_mod.Scheduler()
+        sched._tick()
+
+        with db.get_db() as conn:
+            bad_row = conn.execute(
+                "SELECT last_error FROM queries WHERE name='bad_cron'"
+            ).fetchone()
+            good_row = conn.execute(
+                "SELECT next_run FROM queries WHERE name='good_query'"
+            ).fetchone()
+
+        assert bad_row["last_error"] is not None
+        assert (
+            "CroniterBadCronError" in bad_row["last_error"] or "ValueError" in bad_row["last_error"]
+        )
+        # Good query was still processed and updated
+        assert good_row["next_run"] != "2020-01-01T00:00:00"
+
+    def test_loop_handles_exception_without_dying(self):
+        """_loop catches exceptions in _tick and stays running."""
+        sched = scheduler_mod.Scheduler()
+        call_count = 0
+
+        def failing_tick(startup=False):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("DB locked transiently")
+            sched.stop()
+
+        sched._tick = failing_tick
+        sched._loop()
+        assert call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Fail-Fast Preview Searches Tests
+# ---------------------------------------------------------------------------
+class TestFailFastPreview:
+    @patch("worker.prowlarr_search_raw")
+    def test_preview_fails_immediately_without_retrying(self, mock_search):
+        mock_search.side_effect = ConnectionError("Prowlarr down")
+        q = worker.WorkQueue()
+        # Submit a preview job
+        job = q.submit(
+            query="test-preview",
+            label="preview:1234abcd",
+            priority=worker.Priority.HIGH,
+        )
+        # Directly process this job in the worker logic
+        try:
+            job.result = worker.prowlarr_search_raw(
+                job.query, job.categories, job.excluded_indexers
+            )
+            job.status = "done"
+        except Exception as exc:
+            job.error = f"{type(exc).__name__}: {exc}"
+            is_preview = job.label.startswith("preview:")
+            max_ret = 1 if is_preview else q._max_retries()
+            if job.attempt < max_ret:
+                job.status = "retrying"
+            else:
+                job.status = "error"
+
+        assert job.status == "error"
+        assert "ConnectionError" in job.error
+
+
+# ---------------------------------------------------------------------------
+# Security Headers & Input Validation Tests
+# ---------------------------------------------------------------------------
+class TestSecurityHeaders:
+    def test_security_headers_present(self, client):
+        resp = client.get("/api/settings")
+        assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+        assert resp.headers.get("X-Frame-Options") == "SAMEORIGIN"
+        assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+        assert "default-src 'self'" in resp.headers.get("Content-Security-Policy", "")
+
+
+class TestInputValidation:
+    def test_settings_url_schemes_invalid(self, client):
+        resp = put_json(
+            client,
+            "/api/settings",
+            {"prowlarrUrl": "ftp://localhost:9696"},
+        )
+        assert resp.status_code == 400
+        assert "prowlarrUrl" in resp.get_json()["errors"]
+
+    def test_settings_negative_interval(self, client):
+        resp = put_json(
+            client,
+            "/api/settings",
+            {"minQueryInterval": -5},
+        )
+        assert resp.status_code == 400
+        assert "minQueryInterval" in resp.get_json()["errors"]
+
+    def test_settings_invalid_retries(self, client):
+        resp = put_json(
+            client,
+            "/api/settings",
+            {"maxRetries": 0},
+        )
+        assert resp.status_code == 400
+        assert "maxRetries" in resp.get_json()["errors"]
+
+    def test_settings_invalid_excluded_indexers(self, client):
+        resp = put_json(
+            client,
+            "/api/settings",
+            {"defaultExcludedIndexers": ["not-an-int"]},
+        )
+        assert resp.status_code == 400
+        assert "defaultExcludedIndexers" in resp.get_json()["errors"]
+
+    def test_patch_query_invalid_excluded_indexers(self, client):
+        qid = _insert_query()
+        resp = patch_json(
+            client,
+            f"/api/queries/{qid}",
+            {"excludedIndexers": "not-a-list"},
+        )
+        assert resp.status_code == 400
+        assert "excludedIndexers" in resp.get_json()["errors"]

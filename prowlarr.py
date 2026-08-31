@@ -104,3 +104,18 @@ def format_size(size_bytes: int | None) -> str:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024
     return f"{size_bytes:.1f} PB"
+
+
+def sanitize_url(url: str | None) -> str | None:
+    """Sanitize URLs from external indexers; only allow http, https, and magnet."""
+    if not url:
+        return None
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url.strip())
+        if parsed.scheme.lower() in ("http", "https", "magnet"):
+            return url.strip()
+    except Exception:
+        pass
+    return None

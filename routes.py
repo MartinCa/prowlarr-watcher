@@ -17,6 +17,7 @@ from prowlarr import (
     format_indexer_ids,
     list_indexers,
     parse_indexer_ids,
+    sanitize_url,
 )
 from scheduler import Scheduler, scheduler
 from worker import Priority, work_queue
@@ -49,7 +50,7 @@ def _check_csrf():
 
 
 @bp.after_app_request
-def _ensure_csrf_cookie(response: Response) -> Response:
+def _add_security_headers_and_csrf(response: Response) -> Response:
     if not request.cookies.get(CSRF_COOKIE):
         response.set_cookie(
             CSRF_COOKIE,
@@ -57,6 +58,13 @@ def _ensure_csrf_cookie(response: Response) -> Response:
             samesite="Strict",
             secure=request.is_secure,
         )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "font-src 'self' data:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self';"
+    )
     return response
 
 
@@ -115,8 +123,8 @@ def _serialize_result(row: sqlite3.Row) -> dict:
         "indexer": row["indexer"],
         "size": row["size"],
         "guid": row["guid"],
-        "infoUrl": row["info_url"],
-        "downloadUrl": row["download_url"],
+        "infoUrl": sanitize_url(row["info_url"]),
+        "downloadUrl": sanitize_url(row["download_url"]),
         "seeders": row["seeders"],
         "firstSeen": row["first_seen"],
         "isNew": bool(row["is_new"]),
@@ -130,18 +138,24 @@ def _serialize_preview_result(r: dict) -> dict:
         "size": r.get("size"),
         "seeders": r.get("seeders"),
         "guid": r.get("guid"),
-        "infoUrl": r.get("infoUrl"),
-        "downloadUrl": r.get("downloadUrl"),
+        "infoUrl": sanitize_url(r.get("infoUrl")),
+        "downloadUrl": sanitize_url(r.get("downloadUrl")),
     }
 
 
 def _serialize_settings() -> dict:
+    raw_interval = get_setting("min_query_interval", "10")
+    try:
+        min_interval = int(float(raw_interval))
+    except ValueError, TypeError:
+        min_interval = 10
+
     return {
         "prowlarrUrl": get_setting("prowlarr_url"),
         "prowlarrApiKey": get_setting("prowlarr_api_key"),
         "prowlarrExternalUrl": get_setting("prowlarr_external_url", ""),
         "defaultCron": get_setting("default_cron", "0 * * * *"),
-        "minQueryInterval": int(get_setting("min_query_interval", "10")),
+        "minQueryInterval": min_interval,
         "maxRetries": int(get_setting("max_retries", "5")),
         "prowlarrTimeout": int(get_setting("prowlarr_timeout", "200")),
         "appriseUrls": get_setting("apprise_urls", ""),
@@ -246,6 +260,20 @@ def update_query(qid: int):
 
     if "excludedIndexers" in body:
         excluded = body["excludedIndexers"]
+        if excluded is not None:
+            if not isinstance(excluded, list):
+                return problem(
+                    400,
+                    "Validation failed",
+                    errors={"excludedIndexers": ["Must be a list or null"]},
+                )
+            for x in excluded:
+                if not isinstance(x, int) or isinstance(x, bool):
+                    return problem(
+                        400,
+                        "Validation failed",
+                        errors={"excludedIndexers": ["All items must be integers"]},
+                    )
         value = None if excluded is None else format_indexer_ids([int(x) for x in excluded])
         with _db_lock, get_db() as conn:
             conn.execute("UPDATE queries SET excluded_indexers=? WHERE id=?", (value, qid))
@@ -373,20 +401,85 @@ def get_settings():
 @bp.route("/settings", methods=["PUT"])
 def put_settings():
     body = request.get_json(silent=True) or {}
+    errors: dict[str, list[str]] = {}
+
     default_cron = str(body.get("defaultCron") or "0 * * * *").strip()
     _, err = _compute_next_or_400(default_cron, field="defaultCron")
     if err:
         return err
 
-    set_setting("prowlarr_url", str(body.get("prowlarrUrl") or "").strip())
+    prowlarr_url = str(body.get("prowlarrUrl") or "").strip()
+    prowlarr_external_url = str(body.get("prowlarrExternalUrl") or "").strip()
+
+    from urllib.parse import urlparse
+
+    if prowlarr_url:
+        parsed = urlparse(prowlarr_url)
+        if parsed.scheme.lower() not in ("http", "https") or not parsed.netloc:
+            errors.setdefault("prowlarrUrl", []).append(
+                "Must be a valid HTTP or HTTPS URL (e.g. http://localhost:9696)"
+            )
+
+    if prowlarr_external_url:
+        parsed = urlparse(prowlarr_external_url)
+        if parsed.scheme.lower() not in ("http", "https") or not parsed.netloc:
+            errors.setdefault("prowlarrExternalUrl", []).append(
+                "Must be a valid HTTP or HTTPS URL (e.g. https://prowlarr.example.com)"
+            )
+
+    try:
+        min_query_interval = float(
+            body.get("minQueryInterval") if "minQueryInterval" in body else 10
+        )
+        if min_query_interval < 0:
+            errors.setdefault("minQueryInterval", []).append("Must be non-negative")
+    except ValueError, TypeError:
+        errors.setdefault("minQueryInterval", []).append("Must be a valid number")
+
+    try:
+        max_retries = int(body.get("maxRetries") if "maxRetries" in body else 5)
+        if max_retries < 1:
+            errors.setdefault("maxRetries", []).append("Must be at least 1")
+    except ValueError, TypeError:
+        errors.setdefault("maxRetries", []).append("Must be a valid integer")
+
+    try:
+        prowlarr_timeout = int(body.get("prowlarrTimeout") if "prowlarrTimeout" in body else 200)
+        if prowlarr_timeout < 1:
+            errors.setdefault("prowlarrTimeout", []).append("Must be at least 1")
+    except ValueError, TypeError:
+        errors.setdefault("prowlarrTimeout", []).append("Must be a valid integer")
+
+    raw_excluded = body.get("defaultExcludedIndexers")
+    excluded_ids: list[int] = []
+    if raw_excluded is not None:
+        if not isinstance(raw_excluded, list):
+            errors.setdefault("defaultExcludedIndexers", []).append("Must be a list")
+        else:
+            for x in raw_excluded:
+                if not isinstance(x, int) or isinstance(x, bool):
+                    errors.setdefault("defaultExcludedIndexers", []).append(
+                        "All items must be integers"
+                    )
+                    break
+                excluded_ids.append(x)
+
+    if errors:
+        return problem(400, "Validation failed", errors=errors)
+
+    set_setting("prowlarr_url", prowlarr_url)
     set_setting("prowlarr_api_key", str(body.get("prowlarrApiKey") or "").strip())
-    set_setting("prowlarr_external_url", str(body.get("prowlarrExternalUrl") or "").strip())
+    set_setting("prowlarr_external_url", prowlarr_external_url)
     set_setting("default_cron", default_cron)
-    set_setting("min_query_interval", str(body.get("minQueryInterval") or "10"))
-    set_setting("max_retries", str(body.get("maxRetries") or "5"))
-    set_setting("prowlarr_timeout", str(body.get("prowlarrTimeout") or "200"))
+    set_setting(
+        "min_query_interval",
+        str(int(min_query_interval))
+        if min_query_interval.is_integer()
+        else str(min_query_interval),
+    )
+    set_setting("max_retries", str(max_retries))
+    set_setting("prowlarr_timeout", str(prowlarr_timeout))
     set_setting("apprise_urls", str(body.get("appriseUrls") or "").strip())
-    excluded_ids = [int(x) for x in (body.get("defaultExcludedIndexers") or [])]
     set_setting("default_excluded_indexers", format_indexer_ids(excluded_ids))
     scheduler.poke()
     return jsonify(_serialize_settings())

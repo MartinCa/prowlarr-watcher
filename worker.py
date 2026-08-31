@@ -133,7 +133,8 @@ class WorkQueue:
                 job.status = "done"
             except Exception as exc:
                 job.error = f"{type(exc).__name__}: {exc}"
-                max_ret = self._max_retries()
+                is_preview = job.label.startswith("preview:")
+                max_ret = 1 if is_preview else self._max_retries()
                 if job.attempt < max_ret:
                     log.warning(
                         "Search failed for %r (attempt %d/%d), retrying",
@@ -148,7 +149,7 @@ class WorkQueue:
                     log.error(
                         "Search failed for %r after %d attempts",
                         job.label,
-                        max_ret,
+                        job.attempt,
                         exc_info=True,
                     )
             finally:
