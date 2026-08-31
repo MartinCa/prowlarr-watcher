@@ -58,7 +58,7 @@ export function QueryCard({
           <span className="bg-border h-3 w-px shrink-0" aria-hidden="true" />
           <span className="inline-flex items-center gap-1">
             <span>query:</span>
-            <code className="bg-muted border-border text-foreground rounded border px-1.5 py-0.5 text-[11px]">
+            <code className="bg-muted border-border text-foreground inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] leading-none">
               {query.query}
             </code>
           </span>
