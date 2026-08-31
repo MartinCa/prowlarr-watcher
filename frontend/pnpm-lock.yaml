@@ -61,8 +61,8 @@ importers:
         version: 1.4.0
     devDependencies:
       '@martinrun/frontend-config':
-        specifier: 0.2.0
-        version: 0.2.0(eslint@10.9.1(jiti@2.7.0)(supports-color@10.2.2))(prettier-plugin-tailwindcss@0.8.1(prettier@3.9.6))(prettier@3.9.6)(supports-color@10.2.2)(typescript@6.0.3)
+        specifier: 0.2.1
+        version: 0.2.1(eslint@10.9.1(jiti@2.7.0)(supports-color@10.2.2))(prettier-plugin-tailwindcss@0.8.1(prettier@3.9.6))(prettier@3.9.6)(supports-color@10.2.2)(typescript@6.0.3)
       '@tanstack/router-plugin':
         specifier: 1.168.35
         version: 1.168.35(@tanstack/react-router@1.170.32(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(rolldown@1.2.6)(supports-color@10.2.2)(vite@8.2.2(@types/node@24.13.3)(jiti@2.7.0))
@@ -368,13 +368,13 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@martinrun/frontend-config@0.2.0':
-    resolution: {integrity: sha512-sSlK9VAOUq3QTo3yPLRBpgWvehSSCK4SU1g8kKC2wtmnFDWDQUqcQmkuNv6DqMvsDZbRVYo4TuTZbhxOYUo/ZQ==}
+  '@martinrun/frontend-config@0.2.1':
+    resolution: {integrity: sha512-EWPqtSl21mxdBCnSQcum8CuKoaliHs+uX0VUdQLzT9pwgeq4JI1qI5pKq61q0A41DAmGL1prEslgIXof9j8cIg==}
     peerDependencies:
       eslint: '>=9'
       prettier: '>=3'
       prettier-plugin-tailwindcss: '>=0.6'
-      typescript: '>=5.5'
+      typescript: '>=5.5 <7'
 
   '@modelcontextprotocol/sdk@1.30.0':
     resolution: {integrity: sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==}
@@ -2996,7 +2996,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@martinrun/frontend-config@0.2.0(eslint@10.9.1(jiti@2.7.0)(supports-color@10.2.2))(prettier-plugin-tailwindcss@0.8.1(prettier@3.9.6))(prettier@3.9.6)(supports-color@10.2.2)(typescript@6.0.3)':
+  '@martinrun/frontend-config@0.2.1(eslint@10.9.1(jiti@2.7.0)(supports-color@10.2.2))(prettier-plugin-tailwindcss@0.8.1(prettier@3.9.6))(prettier@3.9.6)(supports-color@10.2.2)(typescript@6.0.3)':
     dependencies:
       '@eslint/js': 10.0.1(eslint@10.9.1(jiti@2.7.0)(supports-color@10.2.2))
       eslint: 10.9.1(jiti@2.7.0)(supports-color@10.2.2)

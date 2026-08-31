@@ -12,28 +12,29 @@ is not listed in **Allowed dependencies** without asking first.
 
 ## 1. Stack
 
-| Layer | Choice | Not this |
-|---|---|---|
-| Language | TypeScript, `strict: true` | JavaScript, `any` |
-| UI runtime | React (function components + hooks only) | class components |
-| Build / routing | Vite + TanStack Router (SPA) *or* Next.js App Router (when SSR/SEO is genuinely needed) | CRA, Webpack by hand |
-| Components | shadcn/ui | MUI, Ant, Chakra, Bootstrap |
-| Primitives | Base UI (shadcn default since July 2026). Pin the choice in `components.json`. | mixing Radix and Base UI in one repo |
-| Styling | Tailwind CSS + CSS variables for theme tokens | CSS-in-JS, SCSS, inline `style={{}}` |
-| Icons | `lucide-react` | mixed icon sets |
-| Server state | TanStack Query | fetch-into-`useState`, fetch-into-Zustand |
-| Client state | `useState` → lifted props → Zustand (in that order) | Redux, Context as a state manager |
-| Forms | `react-hook-form` + `zod` (client-side validation only — the server validates independently) | hand-rolled validation |
-| Tables | TanStack Table (headless) + shadcn table primitives | ag-grid, custom sort logic |
-| Charts | shadcn/ui Charts (Recharts) | new charting lib per project |
-| Dates | `date-fns` | moment, hand-rolled parsing |
-| Tests | Vitest + Testing Library; Playwright only where a flow is worth it | Enzyme, snapshot-everything |
-| Lint/format | ESLint (typescript-eslint) + Prettier, both enforced in CI | per-file disables without a reason comment |
+| Layer           | Choice                                                                                       | Not this                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Language        | TypeScript, `strict: true`                                                                   | JavaScript, `any`                                                              |
+| UI runtime      | React (function components + hooks only)                                                     | class components                                                               |
+| Build / routing | Vite + TanStack Router (SPA) _or_ Next.js App Router (when SSR/SEO is genuinely needed)      | CRA, Webpack by hand                                                           |
+| Components      | shadcn/ui                                                                                    | MUI, Ant, Chakra, Bootstrap                                                    |
+| Primitives      | Base UI (shadcn default since July 2026). Pin the choice in `components.json`.               | mixing Radix and Base UI in one repo                                           |
+| Styling         | Tailwind CSS + CSS variables for theme tokens                                                | CSS-in-JS, SCSS, inline `style={{}}`                                           |
+| Icons           | `lucide-react`                                                                               | mixed icon sets                                                                |
+| Server state    | TanStack Query                                                                               | fetch-into-`useState`, fetch-into-Zustand                                      |
+| Client state    | `useState` → lifted props → Zustand (in that order)                                          | Redux, Context as a state manager                                              |
+| Forms           | `react-hook-form` + `zod` (client-side validation only — the server validates independently) | hand-rolled validation                                                         |
+| Tables          | TanStack Table (headless) + shadcn table primitives                                          | ag-grid, custom sort logic                                                     |
+| Charts          | shadcn/ui Charts (Recharts)                                                                  | new charting lib per project                                                   |
+| Dates           | `date-fns`                                                                                   | moment, hand-rolled parsing                                                    |
+| Tests           | Vitest + Testing Library; Playwright only where a flow is worth it                           | Enzyme, snapshot-everything                                                    |
+| Lint/format     | ESLint (typescript-eslint) + Prettier, both enforced in CI with `--max-warnings 0`           | per-file disables without a reason comment; a lint job that passes on warnings |
 
 **Default to the SPA path.** Most projects here are internal tools behind auth on a
 private network. They do not need SSR, RSC, or an SEO story, and the client/server
 component boundary is a recurring source of agent mistakes. Reach for Next.js only when
-there is a stated reason, and write that reason in the project README.
+there is a stated reason, and write that reason in the project README. When using TanStack
+Router, `src/routeTree.gen.ts` is committed to Git as a vendored contract (see Section 7).
 
 ### Allowed dependencies
 
@@ -55,6 +56,7 @@ Yes → TanStack Query. Always. Never copy query results into another store. Nev
 `loading` / `error` / refetch by hand. Derive from the query cache; invalidate on mutation.
 
 **2. If not, how far does it need to travel?**
+
 - One component → `useState` / `useReducer`.
 - Parent and a couple of children → lift it, pass props. Prop drilling two levels is fine
   and is more legible to a reader (and to an agent) than an indirect store.
@@ -88,12 +90,55 @@ Components are **copied into this repo** and are therefore our code. That has co
 - **Do not edit files in `src/components/ui/` to change appearance.** Restyle by overriding
   theme CSS variables, or by targeting `[data-slot="..."]` in the global stylesheet.
   Unmodified vendor files can be overwritten without thought, which is the whole point.
-- If a component needs different *behaviour*, wrap it. Put the wrapper in
+- If a component needs different _behaviour_, wrap it. Put the wrapper in
   `src/components/` (not `ui/`) and import the primitive from `ui/`.
 - Updating: `shadcn diff` to see what changed upstream, `--dry-run` / `--view` to inspect
   before writing, then `add <name> --overwrite` and resolve with git. This is a deliberate,
   occasional chore — Renovate cannot do it. Run it when there is a reason to, not on a schedule.
 - Use `shadcn docs <component>` to get current API surface rather than recalling props.
+
+### Known Base UI component quirks
+
+Found empirically, not documented by shadcn or Base UI — no build error, no lint
+warning, no console message, just a UI bug the first time real content or a real
+form hits the component. Patch these right after `add`, the same way you'd handle
+the Accordion keyframe gotcha in [MIGRATION.md](../docs/MIGRATION.md).
+
+**`radio-group.tsx`: the indicator doesn't self-center.** Base UI's
+`Radio.Indicator` centers its own children (the dot icon) but not itself within
+the root circle — unlike `checkbox.tsx`'s root, which already carries
+`grid place-content-center` for the same reason. Add the same two classes to
+`RadioGroupItem`'s root:
+
+```diff
+  <RadioPrimitive.Root
+    className={cn(
+-     "border-primary text-primary ... aspect-square h-4 w-4 cursor-pointer rounded-full border ...",
++     "border-primary text-primary ... grid aspect-square h-4 w-4 cursor-pointer place-content-center rounded-full border ...",
+```
+
+**`dialog.tsx`: `DialogContent` sets no `max-h`/`overflow` of its own.** shadcn's
+own docs describe the fix as a flex header/body/footer split, but nothing in the
+generated component enforces it — so the easy first move,
+`<DialogContent className="max-h-[85vh] overflow-y-auto">` wrapped around content
+that already has its own bounded list or table, produces two independently
+scrolling regions nested inside each other (visibly two scrollbars), and skipping
+the wrapper entirely lets a tall dialog grow straight past the viewport instead of
+scrolling internally. Structure any dialog whose content can overflow as:
+
+```tsx
+<DialogContent className="flex max-h-[85vh] flex-col overflow-hidden">
+  <DialogHeader>...</DialogHeader>
+  <div className="flex-1 overflow-y-auto">...</div>
+  {/* a fixed action row, if any, is a sibling here — not inside the scroll area */}
+</DialogContent>
+```
+
+Drop `max-h-*`/`overflow-y-auto` from any bounded child inside that body — the
+outer body is now the only scroll container (give it `overflow-x-auto` too if the
+content can also overflow horizontally, e.g. a wide table). Skip the split, and
+the outer `max-h`/`overflow-hidden`, for a dialog that can never overflow (a
+confirm prompt, a short form) — it's dead weight there.
 
 ---
 
@@ -108,7 +153,9 @@ src/
   stores/           zustand stores
   lib/
     api.ts          typed fetch client, single place that knows the base URL
+    api-types.ts    generated OpenAPI types — vendored, do not hand-edit
     utils.ts        cn() and friends
+  routeTree.gen.ts  generated TanStack Router tree — vendored, do not hand-edit
   hooks/            shared hooks only; feature hooks live with the feature
 ```
 
@@ -127,8 +174,14 @@ src/
 - **Never hardcode a colour.** Use the semantic theme tokens (`bg-background`,
   `text-muted-foreground`, `border-border`, `bg-destructive`). A hex value or a raw
   `bg-blue-500` in a component is a bug — it will break in dark mode and it breaks theming
-  across projects.
-- Dark mode is a requirement, not a feature. It works for free if the token rule is followed.
+  across projects. For health and status, use the shared status tokens
+  (`text-status-ok`, `bg-status-warn`, `text-status-error`, `text-status-unknown`) rather
+  than inventing a green per project; they come from
+  `MartinCa/frontend-kit/theme` and are not part of the shadcn preset.
+- Dark mode is a requirement, not a feature. Styling is free if the token rule is followed, but
+  the app must still be wrapped in `MartinCa/frontend-kit/theme-provider`'s `<ThemeProvider>` —
+  the `.dark` class in `theme.css` only applies when something toggles it. Without the provider
+  the app always renders light, regardless of the system preference.
 - Spacing uses the Tailwind scale. No arbitrary values (`p-[13px]`) without a comment.
 - Compose conditional classes with `cn()`. Never build class strings with template literals
   and ternaries inline.
@@ -162,7 +215,12 @@ is ASP.NET Core, FastAPI, Flask, or a Go binary. The rules below keep it that wa
   from it into `src/lib/api-types.ts` and never hand-writes response interfaces. Regenerate
   as a checked-in build step so the diff is visible in review. FastAPI produces a spec from
   its models automatically; ASP.NET Core produces one via its built-in OpenAPI support.
-- Generated types are vendored like shadcn components: never hand-edited, always regenerated.
+- **Generated contract files are committed and vendored.** Both backend types
+  (`src/lib/api-types.ts` from OpenAPI) and routing definitions (`src/routeTree.gen.ts`
+  from TanStack Router) must be committed to Git. Treat them as vendored: never hand-edited,
+  always regenerated. Committing `src/routeTree.gen.ts` ensures fresh clones have complete
+  route types for IDEs and type-aware linting (`projectService: true`) without requiring an
+  upfront build. TanStack Router treats `routeTree.gen.ts` as part of application source code.
 - `src/lib/api.ts` is the only file that knows the base URL, auth header, and error shape.
   Components and query hooks call through it. Swapping backends should touch one file.
 - **JSON is camelCase over the wire**, whichever language produces it. Configure the
@@ -186,6 +244,7 @@ is ASP.NET Core, FastAPI, Flask, or a Go binary. The rules below keep it that wa
 
 - Check whether a shadcn component already exists before building one. It usually does.
 - Do not add a state library, a data-fetching library, or a UI kit. The stack is decided.
+- Do not hand-edit `src/components/ui/**`, `src/lib/api-types.ts`, or `src/routeTree.gen.ts`. All are vendored.
 - Do not refactor unrelated files while completing a task.
 - Prefer deleting code to adding an option. This is a hobby project; there is no user base
   to keep happy.
@@ -199,7 +258,7 @@ is ASP.NET Core, FastAPI, Flask, or a Go binary. The rules below keep it that wa
 
 ## 9. Project-specific
 
-*Fill this in per repo. Everything above is shared and should stay identical across projects.*
+_Fill this in per repo. Everything above is shared and should stay identical across projects._
 
 - **What this app is:** Prowlarr Watcher — a small web app that periodically searches
   [Prowlarr](https://github.com/Prowlarr/Prowlarr) for new results matching saved
