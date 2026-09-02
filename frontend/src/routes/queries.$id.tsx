@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,7 @@ export const Route = createFileRoute("/queries/$id")({ component: QueryDetailPag
 function QueryDetailPage() {
   const { id } = Route.useParams();
   const qid = Number(id);
+  const navigate = useNavigate();
   const detail = useQueryDetail(qid);
   const settings = useSettings();
   const updateQuery = useUpdateQuery(qid);
@@ -64,7 +65,21 @@ function QueryDetailPage() {
 
   function handleDelete() {
     if (!confirm("Delete this query and all its results?")) return;
-    deleteQuery.mutate(qid);
+    deleteQuery.mutate(qid, {
+      onSuccess: () => {
+        toast.success("Query deleted");
+        void navigate({ to: "/" });
+      },
+      onError: (error) => {
+        // A 404 means it was already deleted (e.g. deleted elsewhere); leave the detail page anyway.
+        const alreadyGone = error instanceof ApiError && error.status === 404;
+        if (alreadyGone) {
+          void navigate({ to: "/" });
+        } else {
+          toast.error(error instanceof ApiError ? error.message : "Delete failed");
+        }
+      },
+    });
   }
 
   function saveCron() {
@@ -110,17 +125,20 @@ function QueryDetailPage() {
       <Card className="flex flex-row flex-wrap items-start gap-8 p-5">
         <Field label="Search query">
           <code className="text-sm">{query.query}</code>
-          {prowlarrBase && sanitizeUrl(`${prowlarrBase}/search?query=${encodeURIComponent(query.query)}`) && (
-            <a
-              href={sanitizeUrl(`${prowlarrBase}/search?query=${encodeURIComponent(query.query)}`)!}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Search in Prowlarr"
-              className="text-muted-foreground ml-2 text-xs hover:underline"
-            >
-              ↗ Prowlarr
-            </a>
-          )}
+          {prowlarrBase &&
+            sanitizeUrl(`${prowlarrBase}/search?query=${encodeURIComponent(query.query)}`) && (
+              <a
+                href={sanitizeUrl(
+                  `${prowlarrBase}/search?query=${encodeURIComponent(query.query)}`,
+                )!}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Search in Prowlarr"
+                className="text-muted-foreground ml-2 text-xs hover:underline"
+              >
+                ↗ Prowlarr
+              </a>
+            )}
         </Field>
         <Field label="Status">
           <span
