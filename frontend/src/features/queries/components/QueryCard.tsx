@@ -67,7 +67,7 @@ export function QueryCard({
             <span
               className={cn(
                 "inline-block h-1.5 w-1.5 rounded-full",
-                query.enabled ? "bg-emerald-500" : "bg-muted-foreground",
+                query.enabled ? "bg-status-ok" : "bg-muted-foreground",
               )}
             />
             <span className={query.enabled ? "text-foreground" : undefined}>

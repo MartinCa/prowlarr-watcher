@@ -83,11 +83,11 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
       }}
     >
       <DialogTrigger render={<Button />}>+ Add Query</DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto overflow-x-hidden sm:max-w-2xl">
+      <DialogContent className="overflow-x-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>New Query</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 min-w-0">
+        <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="query-input">Search Query</Label>
             <div className="flex gap-2">
@@ -190,10 +190,19 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={!queryText.trim() || createQuery.isPending}>
+            <Button
+              type="submit"
+              disabled={!queryText.trim() || createQuery.isPending}
+              className="w-full sm:w-auto"
+            >
               Add Query
             </Button>
           </DialogFooter>

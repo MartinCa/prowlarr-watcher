@@ -99,7 +99,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
             </Button>
             {testProwlarr.data && (
               <span
-                className={`font-mono text-xs ${testProwlarr.data.ok ? "text-green-600" : "text-destructive"}`}
+                className={`font-mono text-xs ${testProwlarr.data.ok ? "text-status-ok" : "text-destructive"}`}
               >
                 {testProwlarr.data.message}
               </span>
@@ -218,7 +218,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
             </Button>
             {testApprise.data && (
               <span
-                className={`font-mono text-xs ${testApprise.data.ok ? "text-green-600" : "text-destructive"}`}
+                className={`font-mono text-xs ${testApprise.data.ok ? "text-status-ok" : "text-destructive"}`}
               >
                 {testApprise.data.message}
               </span>

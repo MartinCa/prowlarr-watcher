@@ -147,7 +147,7 @@ def _serialize_settings() -> dict:
     raw_interval = get_setting("min_query_interval", "10")
     try:
         min_interval = int(float(raw_interval))
-    except ValueError, TypeError:
+    except Exception:
         min_interval = 10
 
     return {
@@ -433,21 +433,21 @@ def put_settings():
         )
         if min_query_interval < 0:
             errors.setdefault("minQueryInterval", []).append("Must be non-negative")
-    except ValueError, TypeError:
+    except Exception:
         errors.setdefault("minQueryInterval", []).append("Must be a valid number")
 
     try:
         max_retries = int(body.get("maxRetries") if "maxRetries" in body else 5)
         if max_retries < 1:
             errors.setdefault("maxRetries", []).append("Must be at least 1")
-    except ValueError, TypeError:
+    except Exception:
         errors.setdefault("maxRetries", []).append("Must be a valid integer")
 
     try:
         prowlarr_timeout = int(body.get("prowlarrTimeout") if "prowlarrTimeout" in body else 200)
         if prowlarr_timeout < 1:
             errors.setdefault("prowlarrTimeout", []).append("Must be at least 1")
-    except ValueError, TypeError:
+    except Exception:
         errors.setdefault("prowlarrTimeout", []).append("Must be a valid integer")
 
     raw_excluded = body.get("defaultExcludedIndexers")
