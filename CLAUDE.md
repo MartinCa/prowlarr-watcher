@@ -8,25 +8,15 @@ A Flask web app that periodically searches Prowlarr for new results and sends no
 
 ## Commands
 
+Commands and verification steps are maintained in [AGENTS.md](AGENTS.md) (single source of truth — kept current there to avoid drift). Quick reference:
+
 ```bash
-# Lint & format (CI runs these on PRs to main)
-ruff check .
-ruff format --check .
-ruff format .          # auto-fix
-
-# Tests
-pytest test_app.py -v          # all tests
-pytest test_app.py::TestWorkQueue -v   # single class
-pytest test_app.py::TestWorkQueue::test_priority_ordering -v  # single test
-
-# Run locally (outside Docker)
-DATA_DIR=./data python app.py
-
-# Docker
-docker compose up -d
+ruff check .           # lint
+ruff format --check .  # format check
+pytest test_app.py -v  # tests
 ```
 
-**Python version:** the backend targets **Python 3.14** (Dockerfile `python:3.14-slim`, CI `python-version: "3.14"`). Sandboxed / OpenHands agents may default to an older interpreter (e.g. 3.13). Always run the above under 3.14 — if it isn't available, `uv python install 3.14` then `uv run --python 3.14 ...`. Don't conclude code is broken from a parse/test failure until you've re-run it under 3.14; 3.13 rejects the legal-in-3.14 bare multi-except `except ValueError, TypeError:` (PEP 758).
+See AGENTS.md "Verification and testing" for the full list — including the **Python version** requirement (run under the project's Python 3.14, not the sandbox's older interpreter, before trusting parse/test results).
 
 ## Architecture
 
@@ -66,12 +56,4 @@ docker compose up -d
 
 ## Before finishing any change
 
-Always run all three before considering a change complete — CI enforces all of them on PRs to main, and catching failures locally is faster than waiting on CI:
-
-```bash
-ruff check .
-ruff format --check .
-pytest test_app.py -v
-```
-
-Fix any failures (or run `ruff format .` to auto-fix formatting) before committing.
+Run the checks in [AGENTS.md](AGENTS.md) "Verification and testing" before considering a change complete — CI enforces them on PRs to main, and catching failures locally is faster than waiting on CI. Fix any failures (or run `ruff format .` to auto-fix formatting) before committing.

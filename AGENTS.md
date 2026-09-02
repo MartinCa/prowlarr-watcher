@@ -59,6 +59,9 @@ pnpm build             # vite build && tsc -b
 
 ```bash
 docker compose up --build
+
+# or outside Docker
+DATA_DIR=./data python app.py
 ```
 
 The app is available at `http://localhost:5000`. Data is persisted in `./data/`.
