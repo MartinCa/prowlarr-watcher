@@ -2013,11 +2013,20 @@ class TestAppRoutes:
     def test_main_block_runs_app(self, monkeypatch):
         """`python app.py` invokes app.run() with the expected args."""
         import runpy
+        from unittest.mock import patch as _patch
 
         mock_run = MagicMock()
         monkeypatch.setattr(Flask, "run", mock_run)
-        # Re-run app.py as __main__ inside the already-patched test context.
-        runpy.run_path(app_mod.__file__, run_name="__main__")
+        # Suppress app.py module-body side effects (init_db + background thread
+        # startups) so the re-execution does not leak real worker/scheduler
+        # threads that would otherwise pollute the rest of the test session.
+        with (
+            _patch("threading.Thread.start"),
+            _patch.object(worker.work_queue, "start"),
+            _patch.object(scheduler_mod.scheduler, "start"),
+            _patch("db.init_db"),
+        ):
+            runpy.run_path(app_mod.__file__, run_name="__main__")
         mock_run.assert_called_once_with(host="0.0.0.0", port=5000, debug=False)
 
 
