@@ -5,14 +5,14 @@ import { useTheme } from "@/components/theme-provider";
 
 /** Toggles between light and dark, collapsing "system" into whichever it currently resolves to. */
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const isDark =
-    theme === "dark" || (theme === "system" && document.documentElement.classList.contains("dark"));
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   return (
     <Button
       variant="ghost"
       size="icon"
+      className="relative"
       aria-label="Toggle theme"
       onClick={() => setTheme(isDark ? "light" : "dark")}
     >

@@ -13,9 +13,9 @@ import { cn } from "@/lib/utils";
 
 function seederColor(seeders: number | null | undefined): string {
   if (seeders == null) return "text-muted-foreground";
-  if (seeders > 10) return "text-green-600";
-  if (seeders > 0) return "text-amber-600";
-  return "text-destructive";
+  if (seeders > 10) return "text-status-ok";
+  if (seeders > 0) return "text-status-warn";
+  return "text-status-error";
 }
 
 export function ResultsTable({ results }: { results: PreviewResult[] }) {
@@ -25,7 +25,7 @@ export function ResultsTable({ results }: { results: PreviewResult[] }) {
   return (
     <div className="preview-table">
       <Table className="table-fixed">
-        <TableHeader className="sticky top-0 z-10 bg-popover">
+        <TableHeader className="bg-popover sticky top-0 z-10">
           <TableRow>
             <TableHead className="bg-popover">Title</TableHead>
             <TableHead className="bg-popover w-28 sm:w-32">Indexer</TableHead>
@@ -44,7 +44,7 @@ export function ResultsTable({ results }: { results: PreviewResult[] }) {
                   {r.indexer ?? "—"}
                 </Badge>
               </TableCell>
-              <TableCell className="font-mono text-right whitespace-nowrap">
+              <TableCell className="text-right font-mono whitespace-nowrap">
                 {formatSize(r.size)}
               </TableCell>
               <TableCell className={cn("text-right", seederColor(r.seeders))}>
@@ -86,10 +86,7 @@ export function StoredResultsTable({ results }: { results: Result[] }) {
             <TableRow key={r.id} className={r.isNew ? "border-l-primary border-l-2" : undefined}>
               <TableCell>
                 {r.isNew && (
-                  <Badge
-                    variant="outline"
-                    className="border-primary/40 bg-primary/10 text-primary"
-                  >
+                  <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
                     New
                   </Badge>
                 )}

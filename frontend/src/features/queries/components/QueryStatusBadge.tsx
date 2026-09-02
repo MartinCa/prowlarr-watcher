@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 export function QueryStatusBadge({
   state,
@@ -10,14 +9,17 @@ export function QueryStatusBadge({
 }) {
   if (state === "queued") {
     return (
-      <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600">
+      <Badge variant="outline" className="border-status-warn/40 bg-status-warn/10 text-status-warn">
         Queued
       </Badge>
     );
   }
   if (state === "running") {
     return (
-      <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-600">
+      <Badge
+        variant="outline"
+        className="border-status-unknown/40 bg-status-unknown/10 text-status-unknown"
+      >
         Running
       </Badge>
     );
@@ -26,7 +28,7 @@ export function QueryStatusBadge({
     return (
       <Badge
         variant="outline"
-        className={cn("border-destructive/40 bg-destructive/10 text-destructive")}
+        className="border-status-error/40 bg-status-error/10 text-status-error"
       >
         Error
       </Badge>

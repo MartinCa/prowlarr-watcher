@@ -142,7 +142,7 @@ function QueryDetailPage() {
         </Field>
         <Field label="Status">
           <span
-            className={`inline-block h-1.5 w-1.5 rounded-full ${query.enabled ? "bg-green-500" : "bg-muted-foreground"}`}
+            className={`inline-block h-1.5 w-1.5 rounded-full ${query.enabled ? "bg-status-ok" : "bg-muted-foreground"}`}
           />{" "}
           {query.enabled ? "Active" : "Paused"}
           {query.lastError && (
