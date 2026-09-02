@@ -31,6 +31,15 @@ Flask web app that polls Prowlarr for new search results on a cron schedule and 
 
 ## Verification and testing
 
+### Python version — match the project, not the sandbox
+
+The backend runs on **Python 3.14** (Dockerfile `python:3.14-slim`, CI `python-version: "3.14"`, `pyproject.toml` `target-version = "py314"`). Sandboxed / OpenHands agents often default to an older interpreter (this sandbox ships Python 3.13). **Running tests or parsing code with the wrong version produces false results** — e.g. 3.13 rejects the bare multi-except `except ValueError, TypeError:` that is legal in 3.14 (PEP 758), which can be misread as a syntax error in the codebase.
+
+Before running `pytest`, `python -m ast`, `compile()`, or any syntax/correctness check:
+
+1. Use Python 3.14. If the sandbox doesn't provide it, get one: `uv python install 3.14` then `uv run --python 3.14 ...` (or `uvx --python 3.14`).
+2. Don't conclude code is broken from a parse/test failure until you've re-run it under the project's Python version.
+
 ### Backend
 ```bash
 pip install -r requirements-dev.txt

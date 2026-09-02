@@ -26,6 +26,8 @@ DATA_DIR=./data python app.py
 docker compose up -d
 ```
 
+**Python version:** the backend targets **Python 3.14** (Dockerfile `python:3.14-slim`, CI `python-version: "3.14"`). Sandboxed / OpenHands agents may default to an older interpreter (e.g. 3.13). Always run the above under 3.14 — if it isn't available, `uv python install 3.14` then `uv run --python 3.14 ...`. Don't conclude code is broken from a parse/test failure until you've re-run it under 3.14; 3.13 rejects the legal-in-3.14 bare multi-except `except ValueError, TypeError:` (PEP 758).
+
 ## Architecture
 
 **Modules:**
@@ -60,7 +62,7 @@ docker compose up -d
 
 `pyproject.toml`: line-length 100, target Python 3.14, lint rules E/F/W/I.
 
-**Caveat:** ruff with `target-version = "py314"` incorrectly reformats `except (ExcA, ExcB):` to `except ExcA, ExcB:` (Python 2 syntax). Use `except Exception:` as a workaround when catching multiple exception types.
+**Note:** ruff with `target-version = "py314"` formats `except (ExcA, ExcB):` to the bare `except ExcA, ExcB:` form. Under Python 3.14 that is **valid** (PEP 758 allows unparenthesized multi-except), so leave it as-is — do not "fix" it to `except Exception:`, which widens the catch. It only fails to parse on Python ≤3.13, which is why you must run tools under 3.14 (see Commands above).
 
 ## Before finishing any change
 
