@@ -15,7 +15,7 @@ function seederColor(seeders: number | null | undefined): string {
   if (seeders == null) return "text-muted-foreground";
   if (seeders > 10) return "text-status-ok";
   if (seeders > 0) return "text-status-warn";
-  return "text-destructive";
+  return "text-status-error";
 }
 
 export function ResultsTable({ results }: { results: PreviewResult[] }) {

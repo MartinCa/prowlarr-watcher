@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 export function QueryStatusBadge({
   state,
@@ -29,7 +28,7 @@ export function QueryStatusBadge({
     return (
       <Badge
         variant="outline"
-        className={cn("border-destructive/40 bg-destructive/10 text-destructive")}
+        className="border-status-error/40 bg-status-error/10 text-status-error"
       >
         Error
       </Badge>

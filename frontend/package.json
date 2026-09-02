@@ -8,7 +8,6 @@
     "dev": "vite",
     "build": "vite build && tsc -b",
     "lint": "eslint . --max-warnings 0",
-    "lint:check": "eslint . --max-warnings 0",
     "format-check": "prettier --check .",
     "test": "vitest run",
     "generate:api-types": "openapi-typescript openapi.json -o src/lib/api-types.ts",
