@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+from flask import Flask
 
 # Point DATA_DIR to a temp directory before importing app (which runs init_db at import time)
 _tmpdir = tempfile.mkdtemp()
@@ -183,6 +184,10 @@ class TestFormatSize:
 
     def test_terabytes(self):
         assert prowlarr.format_size(3 * 1024**4) == "3.0 TB"
+
+    def test_petabytes(self):
+        assert prowlarr.format_size(2 * 1024**5) == "2.0 PB"
+        assert prowlarr.format_size(3.5 * 1024**5) == "3.5 PB"
 
 
 # ===========================================================================
@@ -759,6 +764,36 @@ class TestWorkQueue:
         wq = self._make_queue()
         assert wq._min_gap() == 0.0
 
+    def test_min_gap_falls_back_when_get_setting_raises(self, monkeypatch):
+        db.set_setting("min_query_interval", "5")
+        wq = self._make_queue()
+
+        def boom(key, default=""):
+            raise RuntimeError("db closed")
+
+        monkeypatch.setattr(worker, "get_setting", boom)
+        assert wq._min_gap() == 10.0
+
+    def test_max_retries_reads_setting(self):
+        db.set_setting("max_retries", "3")
+        wq = self._make_queue()
+        assert wq._max_retries() == 3
+
+    def test_max_retries_falls_back_and_clamps(self, monkeypatch):
+        db.set_setting("max_retries", "2")
+        wq = self._make_queue()
+
+        def boom(key, default=""):
+            raise RuntimeError("db closed")
+
+        monkeypatch.setattr(worker, "get_setting", boom)
+        assert wq._max_retries() == 5
+
+        # Clamps below 1 (once the setting is readable again)
+        monkeypatch.undo()
+        db.set_setting("max_retries", "0")
+        assert wq._max_retries() == 1
+
 
 # ===========================================================================
 # Result processing callback tests
@@ -986,6 +1021,50 @@ class TestScheduler:
         new_next = datetime.fromisoformat(q["next_run"])
         assert new_next > datetime.now(timezone.utc)
 
+    @patch.object(worker.work_queue, "submit")
+    def test_tick_startup_logs_and_queues_overdue(self, mock_submit, caplog):
+        """startup=True logs the enabled-query count and the overdue query line."""
+        import logging
+
+        mock_submit.return_value = worker.Job()
+        now = datetime.now(timezone.utc).isoformat()
+        with db._db_lock, db.get_db() as conn:
+            conn.execute(
+                "INSERT INTO queries (name, query, cron, enabled, created_at, next_run) "
+                "VALUES (?,?,?,1,?,?)",
+                ("Startup", "ubuntu", "*/5 * * * *", now, "2020-01-01T00:00:00+00:00"),
+            )
+            conn.commit()
+
+        sched = scheduler_mod.Scheduler()
+        with caplog.at_level(logging.INFO):
+            sched._tick(startup=True)
+
+        assert "Checking for overdue queries at startup (1 enabled)" in caplog.text
+        assert "Overdue: query" in caplog.text and "'ubuntu'" in caplog.text
+        mock_submit.assert_called_once()
+
+    @patch.object(worker.work_queue, "submit")
+    def test_tick_computes_and_persists_missing_next_run(self, mock_submit):
+        """A query with a NULL next_run gets one computed and stored."""
+        mock_submit.return_value = worker.Job()
+        with db._db_lock, db.get_db() as conn:
+            cur = conn.execute(
+                "INSERT INTO queries (name, query, cron, enabled, created_at, next_run) "
+                "VALUES (?,?,?,1,?,NULL)",
+                ("NoNext", "ubuntu", "*/5 * * * *", datetime.now(timezone.utc).isoformat()),
+            )
+            qid = cur.lastrowid
+            conn.commit()
+
+        sched = scheduler_mod.Scheduler()
+        sched._tick()
+
+        with db.get_db() as conn:
+            q = conn.execute("SELECT next_run FROM queries WHERE id=?", (qid,)).fetchone()
+        assert q["next_run"] is not None
+        assert datetime.fromisoformat(q["next_run"]) > datetime.now(timezone.utc)
+
 
 # ===========================================================================
 # Notification tests
@@ -1044,6 +1123,58 @@ class TestNotify:
 
         body = mock_ap.notify.call_args.kwargs["body"]
         assert "… and 5 more" in body
+
+
+class TestNotifyError:
+    @patch("notifications.apprise.Apprise")
+    def test_looks_up_query_when_query_text_missing(self, mock_apprise_cls):
+        """Missing query_text: name/query are fetched from the DB."""
+        db.set_setting("apprise_urls", "json://localhost/test")
+        qid = _insert_query(name="RealQ", query="real-query")
+        mock_ap = MagicMock()
+        mock_apprise_cls.return_value = mock_ap
+
+        notifications.notify_error(qid, None, "scheduled", "boom")
+
+        mock_ap.add.assert_called_once_with("json://localhost/test")
+        kwargs = mock_ap.notify.call_args.kwargs
+        assert "[Prowlarr] Search failed — RealQ" == kwargs["title"]
+        assert "Type: scheduled" in kwargs["body"]
+        assert "Query: real-query" in kwargs["body"]
+        assert "Error: boom" in kwargs["body"]
+
+    @patch("notifications.apprise.Apprise")
+    def test_missing_query_uses_fallback_name(self, mock_apprise_cls):
+        """Nonexistent qid: falls back to Q<id> name and '?' query."""
+        db.set_setting("apprise_urls", "json://localhost/test")
+        mock_ap = MagicMock()
+        mock_apprise_cls.return_value = mock_ap
+
+        notifications.notify_error(999999, None, "scheduled", "boom")
+
+        kwargs = mock_ap.notify.call_args.kwargs
+        assert kwargs["title"] == "[Prowlarr] Search failed — Q999999"
+        assert "Query: ?" in kwargs["body"]
+
+    @patch("notifications.apprise.Apprise")
+    def test_uses_provided_query_text_as_name(self, mock_apprise_cls):
+        """When query_text is given it doubles as the display name."""
+        db.set_setting("apprise_urls", "json://localhost/test")
+        mock_ap = MagicMock()
+        mock_apprise_cls.return_value = mock_ap
+
+        notifications.notify_error(123, "my-text", "seed", "nope")
+
+        kwargs = mock_ap.notify.call_args.kwargs
+        assert kwargs["title"] == "[Prowlarr] Search failed — my-text"
+        assert "Type: seed" in kwargs["body"]
+        assert "Query: my-text" in kwargs["body"]
+
+    @patch("notifications.apprise.Apprise")
+    def test_skips_when_no_urls(self, mock_apprise_cls):
+        db.set_setting("apprise_urls", "")
+        notifications.notify_error(1, "q", "scheduled", "boom")
+        mock_apprise_cls.return_value.notify.assert_not_called()
 
 
 # ===========================================================================
@@ -1267,6 +1398,20 @@ class TestUpdateQuery:
         data = client.get(f"/api/queries/{qid}").get_json()
         assert data["excludedIndexers"] is None
 
+    def test_update_excluded_indexers_non_int_items(self, client):
+        qid = _insert_query()
+        resp = patch_json(
+            client,
+            f"/api/queries/{qid}",
+            {"excludedIndexers": [1, "two"]},
+        )
+        assert resp.status_code == 400
+        assert resp.content_type == "application/problem+json"
+        assert "excludedIndexers" in resp.get_json()["errors"]
+
+        data = client.get(f"/api/queries/{qid}").get_json()
+        assert data["excludedIndexers"] is None
+
     def test_update_note(self, client):
         qid = _insert_query()
         patch_json(client, f"/api/queries/{qid}", {"note": "Only stable releases"})
@@ -1408,6 +1553,12 @@ class TestGetSettings:
         assert resp.status_code == 200
         assert "prowlarrUrl" in resp.get_json()
 
+    def test_invalid_stored_interval_falls_back_to_10(self, client):
+        db.set_setting("min_query_interval", "abc")
+        resp = client.get("/api/settings")
+        assert resp.status_code == 200
+        assert resp.get_json()["minQueryInterval"] == 10
+
 
 class TestPutSettings:
     def test_saves_settings(self, client):
@@ -1450,6 +1601,63 @@ class TestPutSettings:
         assert resp.content_type == "application/problem+json"
         assert "defaultCron" in resp.get_json()["errors"]
         assert db.get_setting("default_cron") == "0 * * * *"
+
+    def test_invalid_external_url_scheme(self, client):
+        resp = put_json(client, "/api/settings", {"prowlarrExternalUrl": "file:///etc/passwd"})
+        assert resp.status_code == 400
+        assert "prowlarrExternalUrl" in resp.get_json()["errors"]
+
+    def test_invalid_min_query_interval_value(self, client):
+        resp = put_json(client, "/api/settings", {"minQueryInterval": "abc"})
+        assert resp.status_code == 400
+        assert "minQueryInterval" in resp.get_json()["errors"]
+
+    def test_invalid_max_retries_value(self, client):
+        resp = put_json(client, "/api/settings", {"maxRetries": "many"})
+        assert resp.status_code == 400
+        assert "maxRetries" in resp.get_json()["errors"]
+
+    def test_invalid_prowlarr_timeout_value(self, client):
+        resp = put_json(client, "/api/settings", {"prowlarrTimeout": "abc"})
+        assert resp.status_code == 400
+        assert "prowlarrTimeout" in resp.get_json()["errors"]
+
+    def test_prowlarr_timeout_below_minimum(self, client):
+        resp = put_json(client, "/api/settings", {"prowlarrTimeout": 0})
+        assert resp.status_code == 400
+        assert "prowlarrTimeout" in resp.get_json()["errors"]
+
+    def test_default_excluded_indexers_must_be_list(self, client):
+        resp = put_json(client, "/api/settings", {"defaultExcludedIndexers": "1,2"})
+        assert resp.status_code == 400
+        assert "defaultExcludedIndexers" in resp.get_json()["errors"]
+
+
+class TestApiIndexers:
+    @patch("routes.list_indexers")
+    def test_lists_indexers(self, mock_list, client):
+        mock_list.return_value = [{"id": 1, "name": "A", "enable": True}]
+        resp = client.get("/api/indexers")
+        assert resp.status_code == 200
+        assert resp.get_json() == {"indexers": [{"id": 1, "name": "A", "enable": True}]}
+
+    @patch("routes.list_indexers")
+    def test_not_configured_returns_400(self, mock_list, client):
+        mock_list.side_effect = ValueError(
+            "Prowlarr URL and API key must be configured in Settings"
+        )
+        resp = client.get("/api/indexers")
+        assert resp.status_code == 400
+        assert resp.content_type == "application/problem+json"
+        assert resp.get_json()["title"] == "Prowlarr not configured"
+
+    @patch("routes.list_indexers")
+    def test_request_failure_returns_502(self, mock_list, client):
+        mock_list.side_effect = __import__("requests").exceptions.ConnectionError("refused")
+        resp = client.get("/api/indexers")
+        assert resp.status_code == 502
+        assert resp.content_type == "application/problem+json"
+        assert "Could not reach Prowlarr" in resp.get_json()["title"]
 
 
 class TestTestProwlarr:
@@ -1517,6 +1725,18 @@ class TestTestProwlarr:
         assert data["ok"] is False
         assert "Unauthorized" in data["message"]
 
+    @patch("routes.requests.get")
+    def test_unexpected_error(self, mock_get, client):
+        mock_get.side_effect = RuntimeError("unexpected")
+        resp = post_json(
+            client,
+            "/api/settings/test-prowlarr",
+            {"prowlarrUrl": "http://x", "prowlarrApiKey": "k"},
+        )
+        data = resp.get_json()
+        assert data["ok"] is False
+        assert "Unexpected error" in data["message"]
+
 
 class TestTestApprise:
     @patch("routes.apprise.Apprise")
@@ -1536,6 +1756,17 @@ class TestTestApprise:
         assert data["ok"] is True
         assert "Sent" in data["message"]
 
+    @patch("routes.apprise.Apprise")
+    def test_delivery_failure_reported(self, mock_cls, client):
+        mock_ap = MagicMock()
+        mock_ap.notify.return_value = False
+        mock_cls.return_value = mock_ap
+
+        resp = post_json(client, "/api/settings/test-apprise", {"appriseUrls": "json://localhost"})
+        data = resp.get_json()
+        assert data["ok"] is False
+        assert "may have failed" in data["message"]
+
 
 # ---------------------------------------------------------------------------
 # Link Sanitization Tests
@@ -1545,6 +1776,10 @@ class TestSanitizeUrl:
         assert prowlarr.sanitize_url("http://example.com") == "http://example.com"
         assert prowlarr.sanitize_url("https://example.com/test") == "https://example.com/test"
         assert prowlarr.sanitize_url("magnet:?xt=urn:btih:123") == "magnet:?xt=urn:btih:123"
+
+    def test_urlparse_exception_returns_none(self):
+        """A URL that makes urlparse raise is rejected (no crash)."""
+        assert prowlarr.sanitize_url("http://[::1") is None
 
     def test_dangerous_schemes(self):
         assert prowlarr.sanitize_url("javascript:alert(1)") is None
@@ -1656,6 +1891,29 @@ class TestSchedulerResilience:
         # Good query was still processed and updated
         assert good_row["next_run"] != "2020-01-01T00:00:00"
 
+    def test_tick_record_error_failure_is_swallowed(self):
+        """If even recording last_error fails, the tick still does not raise."""
+        with db._db_lock, db.get_db() as conn:
+            conn.execute(
+                "INSERT INTO queries (name, query, cron, created_at, next_run, enabled)"
+                " VALUES ('bad', 'bad', 'invalid cron', '2026-01-01T00:00:00', NULL, 1)"
+            )
+            conn.commit()
+
+        sched = scheduler_mod.Scheduler()
+        real_get_db = db.get_db
+        calls = {"n": 0}
+
+        def flaky_get_db():
+            # First call: fetch rows. Second call: UPDATE last_error → raise.
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise RuntimeError("record failed")
+            return real_get_db()
+
+        with patch("scheduler.get_db", side_effect=flaky_get_db):
+            sched._tick()  # must not raise
+
     def test_loop_handles_exception_without_dying(self):
         """_loop catches exceptions in _tick and stays running."""
         sched = scheduler_mod.Scheduler()
@@ -1704,6 +1962,63 @@ class TestFailFastPreview:
 
         assert job.status == "error"
         assert "ConnectionError" in job.error
+
+
+# ---------------------------------------------------------------------------
+# App shell routes (index_page, not_found) and __main__ entry point
+# ---------------------------------------------------------------------------
+class TestAppRoutes:
+    def _point_app_at_static(self, tmp_path, monkeypatch):
+        """Point the app's static dir at a temp dir containing index.html."""
+        static_dir = tmp_path / "static"
+        static_dir.mkdir()
+        (static_dir / "index.html").write_text("<!doctype html><title>SPA</title>")
+        monkeypatch.setattr(app_mod, "STATIC_DIR", static_dir)
+        monkeypatch.setattr(app_mod.app, "static_folder", str(static_dir))
+
+    def test_index_page_serves_static_index(self, tmp_path, monkeypatch):
+        self._point_app_at_static(tmp_path, monkeypatch)
+        with app_mod.app.test_client() as c:
+            resp = c.get("/")
+        assert resp.status_code == 200
+        assert resp.content_type == "text/html; charset=utf-8"
+        assert "<title>SPA</title>" in resp.get_data(as_text=True)
+
+    def test_not_found_non_api_serves_spa_shell(self, tmp_path, monkeypatch):
+        self._point_app_at_static(tmp_path, monkeypatch)
+        with app_mod.app.test_client() as c:
+            resp = c.get("/some/client/route")
+        assert resp.status_code == 200
+        assert resp.content_type == "text/html; charset=utf-8"
+        assert "<title>SPA</title>" in resp.get_data(as_text=True)
+
+    def test_not_found_api_returns_problem_json(self):
+        with app_mod.app.test_client() as c:
+            resp = c.get("/api/nonexistent")
+        assert resp.status_code == 404
+        assert resp.content_type == "application/problem+json"
+        assert resp.get_json()["title"] == "Not found"
+
+    def test_not_found_without_index_file_returns_problem_json(self, tmp_path, monkeypatch):
+        empty_dir = tmp_path / "empty-static"
+        empty_dir.mkdir()
+        monkeypatch.setattr(app_mod, "STATIC_DIR", empty_dir)
+        monkeypatch.setattr(app_mod.app, "static_folder", str(empty_dir))
+        with app_mod.app.test_client() as c:
+            resp = c.get("/missing-shell")
+        assert resp.status_code == 404
+        assert resp.content_type == "application/problem+json"
+        assert resp.get_json()["title"] == "Not found"
+
+    def test_main_block_runs_app(self, monkeypatch):
+        """`python app.py` invokes app.run() with the expected args."""
+        import runpy
+
+        mock_run = MagicMock()
+        monkeypatch.setattr(Flask, "run", mock_run)
+        # Re-run app.py as __main__ inside the already-patched test context.
+        runpy.run_path(app_mod.__file__, run_name="__main__")
+        mock_run.assert_called_once_with(host="0.0.0.0", port=5000, debug=False)
 
 
 # ---------------------------------------------------------------------------
