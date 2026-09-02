@@ -33,11 +33,11 @@ export function QueryCard({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-4 rounded-md border p-4",
+        "flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4",
         !query.enabled && "opacity-50",
       )}
     >
-      <div>
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Link
             to="/queries/$id"
@@ -62,7 +62,7 @@ export function QueryCard({
         {noteOpen && hasNote && (
           <p className="text-muted-foreground mt-1 text-xs whitespace-pre-wrap">{query.note}</p>
         )}
-        <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-xs">
+        <div className="text-muted-foreground mt-1.5 flex flex-col gap-y-1 font-mono text-xs sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2.5">
           <span className="inline-flex items-center gap-1.5">
             <span
               className={cn(
@@ -73,23 +73,26 @@ export function QueryCard({
             <span className={query.enabled ? "text-foreground" : undefined}>
               {query.enabled ? "active" : "paused"}
             </span>
+            <QueryStatusBadge state={queueState} hasError={!!query.lastError} />
           </span>
-          <QueryStatusBadge state={queueState} hasError={!!query.lastError} />
-          <span className="bg-border h-3 w-px shrink-0" aria-hidden="true" />
+          <span className="bg-border hidden h-3 w-px shrink-0 sm:inline-block" aria-hidden="true" />
           <span className="inline-flex items-center gap-1">
             <span>query:</span>
             <code className="bg-muted border-border text-foreground inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] leading-none">
               {query.query}
             </code>
           </span>
-          <span className="bg-border h-3 w-px shrink-0" aria-hidden="true" />
+          <span className="bg-border hidden h-3 w-px shrink-0 sm:inline-block" aria-hidden="true" />
           <span className="inline-flex items-center gap-1">
             <span>last new:</span>
             <span className="text-foreground">{formatRelativeTime(query.lastNewResult)}</span>
           </span>
           {query.lastCount != null && (
             <>
-              <span className="bg-border h-3 w-px shrink-0" aria-hidden="true" />
+              <span
+                className="bg-border hidden h-3 w-px shrink-0 sm:inline-block"
+                aria-hidden="true"
+              />
               <span className="inline-flex items-center gap-1">
                 <span className="text-foreground font-semibold">{query.lastCount}</span>
                 <span>results</span>
@@ -98,7 +101,7 @@ export function QueryCard({
           )}
         </div>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center justify-end gap-1">
         <Button
           variant="ghost"
           size="icon"
