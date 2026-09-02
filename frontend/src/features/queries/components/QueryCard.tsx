@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { CirclePlay, Pause, Play, Trash2 } from "lucide-react";
+import { CirclePlay, Pause, Play, StickyNote, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { QueryStatusBadge } from "@/features/queries/components/QueryStatusBadge";
@@ -19,6 +20,8 @@ export function QueryCard({
   const updateQuery = useUpdateQuery(query.id);
   const deleteQuery = useDeleteQuery();
   const runQuery = useRunQuery();
+  const [noteOpen, setNoteOpen] = useState(false);
+  const hasNote = !!query.note && query.note.length > 0;
 
   function handleDelete() {
     if (!confirm("Delete this query and all its results?")) return;
@@ -35,13 +38,30 @@ export function QueryCard({
       )}
     >
       <div>
-        <Link
-          to="/queries/$id"
-          params={{ id: String(query.id) }}
-          className="font-medium hover:underline"
-        >
-          {query.name}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/queries/$id"
+            params={{ id: String(query.id) }}
+            className="font-medium hover:underline"
+          >
+            {query.name}
+          </Link>
+          {hasNote && (
+            <button
+              type="button"
+              onClick={() => setNoteOpen((v) => !v)}
+              aria-expanded={noteOpen}
+              aria-label={noteOpen ? "Hide note" : "Show note"}
+              title={noteOpen ? "Hide note" : "Show note"}
+              className="text-muted-foreground hover:text-foreground inline-flex items-center rounded p-0.5"
+            >
+              <StickyNote className="size-3.5" />
+            </button>
+          )}
+        </div>
+        {noteOpen && hasNote && (
+          <p className="text-muted-foreground mt-1 text-xs whitespace-pre-wrap">{query.note}</p>
+        )}
         <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-xs">
           <span className="inline-flex items-center gap-1.5">
             <span
