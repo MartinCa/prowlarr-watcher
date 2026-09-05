@@ -1,7 +1,4 @@
-import { Check, Copy, ExternalLink } from "lucide-react";
-import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -10,51 +7,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { copyText } from "@/lib/clipboard";
 import { formatRelativeTime, formatSize, sanitizeUrl } from "@/lib/format";
 import type { PreviewResult, Result } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-function TrackerLinkIcon({ href }: { href: string | null }) {
-  if (!href) return null;
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      title="Open at tracker"
-      aria-label="Open at tracker"
-      className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex items-center justify-center rounded-lg p-1.5"
-    >
-      <ExternalLink className="size-3.5" />
-    </a>
-  );
-}
-
-function CopyLinkButton({ href }: { href: string | null }) {
-  const [copied, setCopied] = useState(false);
-  if (!href) return null;
-  const url = href;
-  function handleCopy() {
-    void copyText(url).then((ok) => {
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }
-    });
-  }
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      title={copied ? "Copied!" : "Copy link"}
-      aria-label={copied ? "Copied!" : "Copy link"}
-      onClick={handleCopy}
-    >
-      {copied ? <Check className="text-status-ok" /> : <Copy />}
-    </Button>
-  );
-}
 
 function seederColor(seeders: number | null | undefined): string {
   if (seeders == null) return "text-muted-foreground";
@@ -84,20 +39,30 @@ export function ResultsTable({ results }: { results: PreviewResult[] }) {
             return (
               <TableRow key={r.guid ?? i}>
                 <TableCell className="truncate" title={r.title ?? undefined}>
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate">{r.title ?? "—"}</span>
-                    {safeInfoUrl && (
-                      <span className="flex shrink-0 items-center gap-0.5">
-                        <TrackerLinkIcon href={safeInfoUrl} />
-                        <CopyLinkButton href={safeInfoUrl} />
-                      </span>
-                    )}
-                  </span>
+                  {r.title ?? "—"}
                 </TableCell>
                 <TableCell className="truncate">
-                  <Badge variant="outline" className="max-w-full truncate">
-                    {r.indexer ?? "—"}
-                  </Badge>
+                  {safeInfoUrl ? (
+                    <Badge
+                      variant="outline"
+                      className="max-w-full truncate"
+                      render={
+                        <a
+                          href={safeInfoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open at tracker"
+                          aria-label={`Open at ${r.indexer ?? "tracker"}`}
+                        />
+                      }
+                    >
+                      {r.indexer ?? "—"}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="max-w-full truncate">
+                      {r.indexer ?? "—"}
+                    </Badge>
+                  )}
                 </TableCell>
                 <TableCell className="text-right font-mono whitespace-nowrap">
                   {formatSize(r.size)}
@@ -132,7 +97,6 @@ export function StoredResultsTable({ results }: { results: Result[] }) {
           <TableHead>Size</TableHead>
           <TableHead>Seeders</TableHead>
           <TableHead>First seen</TableHead>
-          <TableHead className="w-20 text-right">Link</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -149,18 +113,7 @@ export function StoredResultsTable({ results }: { results: Result[] }) {
                 )}
               </TableCell>
               <TableCell className="max-w-96 truncate">
-                {safeInfoUrl ? (
-                  <a
-                    href={safeInfoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline"
-                  >
-                    {r.title ?? "—"}
-                  </a>
-                ) : (
-                  (r.title ?? "—")
-                )}
+                {r.title ?? "—"}
                 {safeDownloadUrl && (
                   <a
                     href={safeDownloadUrl}
@@ -174,18 +127,29 @@ export function StoredResultsTable({ results }: { results: Result[] }) {
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant="outline">{r.indexer ?? "—"}</Badge>
+                {safeInfoUrl ? (
+                  <Badge
+                    variant="outline"
+                    render={
+                      <a
+                        href={safeInfoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open at tracker"
+                        aria-label={`Open at ${r.indexer ?? "tracker"}`}
+                      />
+                    }
+                  >
+                    {r.indexer ?? "—"}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">{r.indexer ?? "—"}</Badge>
+                )}
               </TableCell>
               <TableCell className="font-mono whitespace-nowrap">{formatSize(r.size)}</TableCell>
               <TableCell className={seederColor(r.seeders)}>{r.seeders ?? "—"}</TableCell>
               <TableCell className="text-muted-foreground font-mono text-xs whitespace-nowrap">
                 {formatRelativeTime(r.firstSeen)}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center justify-end gap-0.5">
-                  <TrackerLinkIcon href={safeInfoUrl} />
-                  <CopyLinkButton href={safeInfoUrl} />
-                </div>
               </TableCell>
             </TableRow>
           );
