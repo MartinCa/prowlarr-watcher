@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Pencil } from "lucide-react";
+import { ChevronDown, Pencil } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -226,9 +226,13 @@ function QueryDetailPage() {
         <StoredResultsTable results={query.results} />
       </div>
 
-      <details ref={settingsRef} className="rounded-md border">
-        <summary className="cursor-pointer list-none p-5 font-mono text-xs tracking-wide uppercase">
+      <details ref={settingsRef} className="group rounded-md border">
+        <summary className="flex cursor-pointer list-none items-center justify-between p-5 font-mono text-xs tracking-wide uppercase">
           Query settings
+          <ChevronDown
+            aria-hidden="true"
+            className="text-muted-foreground size-4 transition-transform group-open:rotate-180"
+          />
         </summary>
         <div className="flex flex-col gap-4 border-t p-5">
           <Card className="flex flex-col gap-3 p-5">
