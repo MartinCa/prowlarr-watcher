@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { copyText } from "@/lib/clipboard";
 import { formatRelativeTime, formatSize, sanitizeUrl } from "@/lib/format";
 import type { PreviewResult, Result } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -35,9 +36,11 @@ function CopyLinkButton({ href }: { href: string | null }) {
   if (!href) return null;
   const url = href;
   function handleCopy() {
-    void navigator.clipboard.writeText(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+    void copyText(url).then((ok) => {
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
     });
   }
   return (
@@ -76,27 +79,35 @@ export function ResultsTable({ results }: { results: PreviewResult[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {results.map((r, i) => (
-            <TableRow key={r.guid ?? i}>
-              <TableCell className="truncate" title={r.title ?? undefined}>
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="min-w-0 flex-1 truncate">{r.title ?? "—"}</span>
-                  <TrackerLinkIcon href={sanitizeUrl(r.infoUrl)} />
-                </span>
-              </TableCell>
-              <TableCell className="truncate">
-                <Badge variant="outline" className="max-w-full truncate">
-                  {r.indexer ?? "—"}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-right font-mono whitespace-nowrap">
-                {formatSize(r.size)}
-              </TableCell>
-              <TableCell className={cn("text-right", seederColor(r.seeders))}>
-                {r.seeders ?? "—"}
-              </TableCell>
-            </TableRow>
-          ))}
+          {results.map((r, i) => {
+            const safeInfoUrl = sanitizeUrl(r.infoUrl);
+            return (
+              <TableRow key={r.guid ?? i}>
+                <TableCell className="truncate" title={r.title ?? undefined}>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="min-w-0 flex-1 truncate">{r.title ?? "—"}</span>
+                    {safeInfoUrl && (
+                      <span className="flex shrink-0 items-center gap-0.5">
+                        <TrackerLinkIcon href={safeInfoUrl} />
+                        <CopyLinkButton href={safeInfoUrl} />
+                      </span>
+                    )}
+                  </span>
+                </TableCell>
+                <TableCell className="truncate">
+                  <Badge variant="outline" className="max-w-full truncate">
+                    {r.indexer ?? "—"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right font-mono whitespace-nowrap">
+                  {formatSize(r.size)}
+                </TableCell>
+                <TableCell className={cn("text-right", seederColor(r.seeders))}>
+                  {r.seeders ?? "—"}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
