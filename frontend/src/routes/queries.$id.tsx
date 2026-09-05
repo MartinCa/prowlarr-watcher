@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { Pencil } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,8 @@ function QueryDetailPage() {
   const updateQuery = useUpdateQuery(qid);
   const deleteQuery = useDeleteQuery();
   const runQuery = useRunQuery();
+
+  const settingsRef = useRef<HTMLDetailsElement>(null);
 
   const [cronInput, setCronInput] = useState<string>();
   const [overrideEnabled, setOverrideEnabled] = useState<boolean>();
@@ -80,6 +83,17 @@ function QueryDetailPage() {
         }
       },
     });
+  }
+
+  function focusSettings(id: string) {
+    const el = settingsRef.current;
+    if (el) {
+      el.open = true;
+      requestAnimationFrame(() => {
+        const input = document.getElementById(id);
+        input?.focus();
+      });
+    }
   }
 
   function saveCron() {
@@ -160,10 +174,26 @@ function QueryDetailPage() {
           {query.enabled && query.nextRun ? formatRelativeTime(query.nextRun) : "—"}
         </Field>
         <Field label="Total results">{query.results.length}</Field>
-        {query.note && <Field label="Note">{query.note}</Field>}
-        {query.cron && <Field label="Schedule">{query.cron}</Field>}
+        {query.note && (
+          <Field label="Note">
+            <EditFieldButton label="Note" onClick={() => focusSettings("note-input")} />
+            {query.note}
+          </Field>
+        )}
+        {query.cron && (
+          <Field label="Schedule">
+            <EditFieldButton label="Schedule" onClick={() => focusSettings("cron-input")} />
+            {query.cron}
+          </Field>
+        )}
         {query.excludedIndexers !== null && (
-          <Field label="Indexer exclusions">{query.excludedIndexers.length} excluded</Field>
+          <Field label="Indexer exclusions">
+            <EditFieldButton
+              label="Indexer exclusions"
+              onClick={() => focusSettings("override-indexers")}
+            />
+            {query.excludedIndexers.length} excluded
+          </Field>
         )}
         <div className="ml-auto flex items-center gap-2">
           <Button size="sm" onClick={() => runQuery.mutate(qid)}>
@@ -196,7 +226,7 @@ function QueryDetailPage() {
         <StoredResultsTable results={query.results} />
       </div>
 
-      <details className="rounded-md border">
+      <details ref={settingsRef} className="rounded-md border">
         <summary className="cursor-pointer list-none p-5 font-mono text-xs tracking-wide uppercase">
           Query settings
         </summary>
@@ -205,6 +235,7 @@ function QueryDetailPage() {
             <h2 className="text-muted-foreground font-mono text-xs uppercase">Note</h2>
             <div className="flex items-center gap-2">
               <Input
+                id="note-input"
                 value={note}
                 placeholder="e.g. Only the remastered release"
                 onChange={(e) => setNoteInput(e.target.value)}
@@ -222,6 +253,7 @@ function QueryDetailPage() {
             <h2 className="text-muted-foreground font-mono text-xs uppercase">Schedule</h2>
             <div className="flex items-center gap-2">
               <Input
+                id="cron-input"
                 className="max-w-56 font-mono"
                 value={cron}
                 placeholder={defaultCron}
@@ -289,7 +321,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div className="text-muted-foreground mb-1 font-mono text-[10px] tracking-wide uppercase">
         {label}
       </div>
-      <div className="text-sm">{children}</div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-sm">{children}</span>
+      </div>
     </div>
+  );
+}
+
+function EditFieldButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`Edit ${label}`}
+      aria-label={`Edit ${label}`}
+      className="text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center rounded p-0.5"
+    >
+      <Pencil className="size-3" />
+    </button>
   );
 }
