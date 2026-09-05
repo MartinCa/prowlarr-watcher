@@ -160,6 +160,11 @@ function QueryDetailPage() {
           {query.enabled && query.nextRun ? formatRelativeTime(query.nextRun) : "—"}
         </Field>
         <Field label="Total results">{query.results.length}</Field>
+        {query.note && <Field label="Note">{query.note}</Field>}
+        {query.cron && <Field label="Schedule">{query.cron}</Field>}
+        {query.excludedIndexers !== null && (
+          <Field label="Indexer exclusions">{query.excludedIndexers.length} excluded</Field>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <Button size="sm" onClick={() => runQuery.mutate(qid)}>
             Run Now
@@ -177,79 +182,6 @@ function QueryDetailPage() {
         </div>
       </Card>
 
-      <Card className="flex flex-col gap-3 p-5">
-        <h2 className="text-muted-foreground font-mono text-xs uppercase">Schedule</h2>
-        <div className="flex items-center gap-2">
-          <Input
-            className="max-w-56 font-mono"
-            value={cron}
-            placeholder={defaultCron}
-            onChange={(e) => setCronInput(e.target.value)}
-          />
-          <Button size="sm" variant="outline" onClick={saveCron}>
-            Save
-          </Button>
-          <span className="text-muted-foreground text-xs">
-            {query.cron
-              ? `Override active — default: ${defaultCron}`
-              : `Using default: ${defaultCron}`}
-          </span>
-        </div>
-        <p className="text-sm">
-          {describeCron(cron || defaultCron)} —{" "}
-          <a
-            href={cronGuruUrl(cron || defaultCron)}
-            target="_blank"
-            rel="noopener"
-            className="text-muted-foreground hover:underline"
-          >
-            crontab.guru
-          </a>
-        </p>
-      </Card>
-
-      <Card className="flex flex-col gap-3 p-5">
-        <h2 className="text-muted-foreground font-mono text-xs uppercase">Note</h2>
-        <div className="flex items-center gap-2">
-          <Input
-            value={note}
-            placeholder="e.g. Only the remastered release"
-            onChange={(e) => setNoteInput(e.target.value)}
-          />
-          <Button size="sm" variant="outline" onClick={saveNote}>
-            Save
-          </Button>
-        </div>
-        <p className="text-muted-foreground text-xs">
-          Shown as the first line of new-result notifications for this query.
-        </p>
-      </Card>
-
-      <Card className="flex flex-col gap-3 p-5">
-        <h2 className="text-muted-foreground font-mono text-xs uppercase">Indexers</h2>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="override-indexers"
-            checked={override}
-            onCheckedChange={(checked) => setOverrideEnabled(checked === true)}
-          />
-          <Label htmlFor="override-indexers" className="font-normal">
-            Override the default exclusion list for this query
-          </Label>
-        </div>
-        <IndexerChecklist excluded={excluded} onChange={setExcludedDraft} disabled={!override} />
-        <p className="text-muted-foreground text-xs">
-          {override
-            ? "Only the checked indexers above are excluded for this query."
-            : "Using the default exclusion list from Settings."}
-        </p>
-        <div>
-          <Button size="sm" variant="outline" onClick={saveIndexers}>
-            Save
-          </Button>
-        </div>
-      </Card>
-
       <div className="flex items-center gap-3">
         <h2 className="text-muted-foreground font-mono text-xs uppercase">
           Results ({query.results.length})
@@ -260,7 +192,93 @@ function QueryDetailPage() {
           </Badge>
         )}
       </div>
-      <StoredResultsTable results={query.results} />
+      <div className="max-h-[70vh] overflow-auto rounded-md border">
+        <StoredResultsTable results={query.results} />
+      </div>
+
+      <details className="rounded-md border">
+        <summary className="cursor-pointer list-none p-5 font-mono text-xs tracking-wide uppercase">
+          Query settings
+        </summary>
+        <div className="flex flex-col gap-4 border-t p-5">
+          <Card className="flex flex-col gap-3 p-5">
+            <h2 className="text-muted-foreground font-mono text-xs uppercase">Note</h2>
+            <div className="flex items-center gap-2">
+              <Input
+                value={note}
+                placeholder="e.g. Only the remastered release"
+                onChange={(e) => setNoteInput(e.target.value)}
+              />
+              <Button size="sm" variant="outline" onClick={saveNote}>
+                Save
+              </Button>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Shown as the first line of new-result notifications for this query.
+            </p>
+          </Card>
+
+          <Card className="flex flex-col gap-3 p-5">
+            <h2 className="text-muted-foreground font-mono text-xs uppercase">Schedule</h2>
+            <div className="flex items-center gap-2">
+              <Input
+                className="max-w-56 font-mono"
+                value={cron}
+                placeholder={defaultCron}
+                onChange={(e) => setCronInput(e.target.value)}
+              />
+              <Button size="sm" variant="outline" onClick={saveCron}>
+                Save
+              </Button>
+              <span className="text-muted-foreground text-xs">
+                {query.cron
+                  ? `Override active — default: ${defaultCron}`
+                  : `Using default: ${defaultCron}`}
+              </span>
+            </div>
+            <p className="text-sm">
+              {describeCron(cron || defaultCron)} —{" "}
+              <a
+                href={cronGuruUrl(cron || defaultCron)}
+                target="_blank"
+                rel="noopener"
+                className="text-muted-foreground hover:underline"
+              >
+                crontab.guru
+              </a>
+            </p>
+          </Card>
+
+          <Card className="flex flex-col gap-3 p-5">
+            <h2 className="text-muted-foreground font-mono text-xs uppercase">Indexers</h2>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="override-indexers"
+                checked={override}
+                onCheckedChange={(checked) => setOverrideEnabled(checked === true)}
+              />
+              <Label htmlFor="override-indexers" className="font-normal">
+                Override the default exclusion list for this query
+              </Label>
+            </div>
+            <IndexerChecklist
+              excluded={excluded}
+              onChange={setExcludedDraft}
+              disabled={!override}
+            />
+            <p className="text-muted-foreground text-xs">
+              {override
+                ? "Only the checked indexers above are excluded for this query."
+                : "Using the default exclusion list from Settings."}
+            </p>
+            <div>
+              <Button size="sm" variant="outline" onClick={saveIndexers}>
+                Save
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </details>
     </div>
   );
 }
