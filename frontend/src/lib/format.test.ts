@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { formatSize, sanitizeUrl } from "./format";
+import { cronGuruUrl, formatSize, sanitizeUrl } from "./format";
+
+describe("cronGuruUrl", () => {
+  it("converts spaces to underscores", () => {
+    expect(cronGuruUrl("0 5 * * 1")).toBe("https://crontab.guru/#0_5_*_*_1");
+  });
+
+  it("URL-encodes special characters", () => {
+    expect(cronGuruUrl('0 5 * * 1 "')).toBe("https://crontab.guru/#0_5_*_*_1_%22");
+    expect(cronGuruUrl("0 5 * * 1#2")).toBe("https://crontab.guru/#0_5_*_*_1%232");
+  });
+});
 
 describe("formatSize", () => {
   it("formats bytes up to PB", () => {
