@@ -28,7 +28,7 @@ is not listed in **Allowed dependencies** without asking first.
 | Charts | shadcn/ui Charts (Recharts) | new charting lib per project |
 | Dates | `date-fns` | moment, hand-rolled parsing |
 | Tests | Vitest + Testing Library; Playwright only where a flow is worth it | Enzyme, snapshot-everything |
-| Lint/format | ESLint (typescript-eslint, TanStack Query plugin) + Prettier, pre-commit hooks (Husky + lint-staged), both enforced in CI with `--max-warnings 0` | per-file disables without a reason comment; a lint job that passes on warnings |
+| Lint/format | ESLint (typescript-eslint, TanStack Query plugin) + Prettier, pre-commit hooks (Lefthook), both enforced in CI with `--max-warnings 0` | per-file disables without a reason comment; a lint job that passes on warnings; Husky (unmaintained — no release since Nov 2024) |
 
 **Default to the SPA path.** Most projects here are internal tools behind auth on a
 private network. They do not need SSR, RSC, or an SEO story, and the client/server
@@ -38,8 +38,13 @@ Router, `src/routeTree.gen.ts` is committed to Git as a vendored contract (see S
 
 ### Allowed dependencies
 
-Anything in the table above, plus: `clsx`, `tailwind-merge`, `class-variance-authority`
-(these come with shadcn), `sonner` for toasts, `cmdk` for command palettes.
+Anything in the table above, plus: `cn` (shadcn's Tailwind class-merging engine — a
+drop-in replacement for `clsx` + `tailwind-merge`, installed via `npx shadcn migrate cn`
+on Tailwind v4 projects; new `shadcn init` scaffolds already use it — the migration
+command is a no-op if the project doesn't already have `clsx`/`tailwind-merge` in
+`lib/utils.ts`, so don't go looking for something to run on a fresh project),
+`class-variance-authority` (these come with shadcn), `sonner` for toasts, `cmdk` for
+command palettes.
 
 Everything else requires a one-line justification in the PR description. Prefer writing
 30 lines over adding a dependency for something small. Prefer a dependency over writing

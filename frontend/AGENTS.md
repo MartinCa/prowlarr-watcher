@@ -17,7 +17,7 @@ part is owned by this repo.
 
 ## Mandatory verification before opening PRs
 
-Git hooks (`husky` and `lint-staged`) format and lint files locally on `git commit`. However, AI agents frequently operate in ephemeral cloud VMs, Web/mobile sessions, or Docker containers where git hooks may not be initialized or executed automatically.
+Git hooks (`lefthook`) format and lint files locally on `git commit`. However, AI agents frequently operate in ephemeral cloud VMs, Web/mobile sessions, or Docker containers where git hooks may not be initialized or executed automatically.
 
 Before creating commits and opening a pull request, you **MUST** run all verification commands explicitly:
 
