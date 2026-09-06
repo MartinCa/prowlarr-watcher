@@ -1,15 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>MartinCa/renovate-config", "github>MartinCa/frontend-kit:renovate-frontend"],
+  "extends": ["github>MartinCa/renovate-config:apps"],
   "packageRules": [
-    {
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "matchCurrentVersion": "!/^0\\./",
-      "automerge": true
-    },
     {
       "matchPackageNames": ["typescript"],
       "allowedVersions": "<7.0.0"
