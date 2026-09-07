@@ -35,9 +35,14 @@ Flask web app that polls Prowlarr for new search results on a cron schedule and 
 
 ### Python version — match the project, not the sandbox
 
-The backend runs on **Python 3.14** (Dockerfile `python:3.14-slim`, CI `python-version: "3.14"`, `pyproject.toml` `target-version = "py314"`). Sandboxed / OpenHands agents often default to an older interpreter (this sandbox ships Python 3.13). **Running tests or parsing code with the wrong version produces false results** — e.g. 3.13 rejects the bare multi-except `except ValueError, TypeError:` that is legal in 3.14 (PEP 758), which can be misread as a syntax error in the codebase.
+The backend runs on **Python 3.14** (Dockerfile `python:3.14-slim`, CI `python-version: "3.14"`, `pyproject.toml` `target-version = "py314"`). **Running tests or parsing code with the wrong version produces false results** — e.g. 3.13 rejects the bare multi-except `except ValueError, TypeError:` that is legal in 3.14 (PEP 758), which can be misread as a syntax error in the codebase.
 
-Before running `pytest`, `python -m ast`, `compile()`, or any syntax/correctness check:
+**The "OpenHands agents often default to an older interpreter (this sandbox ships Python 3.13)" observation is OpenHands-specific.** Confirm you are actually in OpenHands — not OpenCode — before treating it as applicable:
+
+- **OpenCode markers** (check these first): env vars `$OPENCODE` / `$OPENCODE_PID` / `$OPENCODE_SERVER_PASSWORD`, or config at `~/.config/opencode/`. If any of these are present, you are in OpenCode — skip to the numbered list below. The "this sandbox ships Python 3.13" claim is an OpenHands sandbox artifact and does not apply; if Python 3.14 isn't available, that's a plain missing-dependency problem to solve normally (e.g. `uv python install 3.14`), not a sign you need an OpenHands-specific flow.
+- **Do not infer OpenHands merely from Python 3.13 being the default interpreter** — that's also exactly what a non-OpenHands, non-OpenCode environment looks like. Only treat the OpenHands-specific observation as relevant once you can positively confirm OpenHands (e.g. the sandbox is running the `ghcr.io/openhands/agent-canvas` image) and none of the OpenCode markers above are present.
+
+Regardless of which harness you're in, use **Python 3.14** for tests and syntax checks — the correctness of the results doesn't depend on the harness. Before running `pytest`, `python -m ast`, `compile()`, or any syntax/correctness check:
 
 1. Use Python 3.14. If the sandbox doesn't provide it, get one: `uv python install 3.14` then `uv run --python 3.14 ...` (or `uvx --python 3.14`).
 2. Don't conclude code is broken from a parse/test failure until you've re-run it under the project's Python version.
