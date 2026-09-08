@@ -19,30 +19,22 @@ Flask web app that polls Prowlarr for new search results on a cron schedule and 
 
 | File | Purpose |
 |------|---------|
-| `app.py` | Flask app setup, static SPA shell serving, startup initialization |
-| `db.py` | SQLite connection helpers, schema setup, settings get/set, write lock |
-| `routes.py` | REST API routes under `/api/*` with double-submit cookie CSRF validation |
-| `worker.py` | Background `WorkQueue` executor for all Prowlarr searches |
-| `scheduler.py` | Background `Scheduler` daemon thread enqueuing due queries |
-| `callbacks.py` | Post-search callbacks for seeding and diffing/inserting query results |
-| `notifications.py` | Apprise notification delivery for new results and query errors |
-| `prowlarr.py` | Prowlarr API client, result hashing, and formatting |
-| `frontend/` | React SPA source (routes, components, hooks, Tailwind styling) |
-| `requirements.txt` | Pinned runtime dependencies |
-| `requirements-dev.txt` | Pinned dev tools (ruff, pytest) |
+| `app.py` | Flask app setup, static SPA shell serving, startup (init_db, work_queue, scheduler). Entry point for gunicorn (`app:app`) and `python app.py` |
+| `db.py` | SQLite setup, `get_db()`, `init_db()`, `get_setting()`/`set_setting()`, `_db_lock` |
+| `routes.py` | Flask Blueprint (`bp`) with all HTTP routes under `/api/*` and double-submit-cookie CSRF validation |
+| `worker.py` | `Priority`, `Job`, `WorkQueue`, `work_queue` singleton — sole executor of all Prowlarr searches |
+| `scheduler.py` | `Scheduler`, `scheduler` singleton — daemon thread enqueuing due queries |
+| `callbacks.py` | `process_query_result()`, `process_seed_result()`, `_insert_result()` |
+| `notifications.py` | `notify_new_results()`, `notify_error()` via Apprise |
+| `prowlarr.py` | Prowlarr API search (`prowlarr_search_raw`), `hash_result()`, `format_size()` |
+| `frontend/` | React SPA source (routes, components, hooks, Tailwind styling) — see `frontend/AGENTS.md` and `frontend/DESIGN.md` for frontend conventions |
+| `requirements.txt` / `requirements-dev.txt` | Pinned runtime dependencies / dev tools (ruff, pytest) |
 
 ## Verification and testing
 
 ### Python version — match the project, not the sandbox
 
-The backend runs on **Python 3.14** (Dockerfile `python:3.14-slim`, CI `python-version: "3.14"`, `pyproject.toml` `target-version = "py314"`). **Running tests or parsing code with the wrong version produces false results** — e.g. 3.13 rejects the bare multi-except `except ValueError, TypeError:` that is legal in 3.14 (PEP 758), which can be misread as a syntax error in the codebase.
-
-**The "OpenHands agents often default to an older interpreter (this sandbox ships Python 3.13)" observation is OpenHands-specific.** Confirm you are actually in OpenHands — not OpenCode — before treating it as applicable:
-
-- **OpenCode markers** (check these first): env vars `$OPENCODE` / `$OPENCODE_PID` / `$OPENCODE_SERVER_PASSWORD`, or config at `~/.config/opencode/`. If any of these are present, you are in OpenCode — skip to the numbered list below. The "this sandbox ships Python 3.13" claim is an OpenHands sandbox artifact and does not apply; if Python 3.14 isn't available, that's a plain missing-dependency problem to solve normally (e.g. `uv python install 3.14`), not a sign you need an OpenHands-specific flow.
-- **Do not infer OpenHands merely from Python 3.13 being the default interpreter** — that's also exactly what a non-OpenHands, non-OpenCode environment looks like. Only treat the OpenHands-specific observation as relevant once you can positively confirm OpenHands (e.g. the sandbox is running the `ghcr.io/openhands/agent-canvas` image) and none of the OpenCode markers above are present.
-
-Regardless of which harness you're in, use **Python 3.14** for tests and syntax checks — the correctness of the results doesn't depend on the harness. Before running `pytest`, `python -m ast`, `compile()`, or any syntax/correctness check:
+The backend runs on **Python 3.14** (Dockerfile `python:3.14-slim`, CI `python-version: "3.14"`, `pyproject.toml` `target-version = "py314"`). **Running tests or parsing code with the wrong version produces false results** — e.g. 3.13 rejects the bare multi-except `except ValueError, TypeError:` that is legal in 3.14 (PEP 758), which can be misread as a syntax error in the codebase. Before running `pytest`, `python -m ast`, `compile()`, or any syntax/correctness check:
 
 1. Use Python 3.14. If the sandbox doesn't provide it, get one: `uv python install 3.14` then `uv run --python 3.14 ...` (or `uvx --python 3.14`).
 2. Don't conclude code is broken from a parse/test failure until you've re-run it under the project's Python version.
@@ -84,17 +76,6 @@ The app is available at `http://localhost:5000`. Data is persisted in `./data/`.
 
 ## Architecture
 
-**Key symbols (per module):**
-
-- **`app.py`** — Flask app creation, Blueprint registration, startup (init_db, work_queue, scheduler). Entry point for gunicorn (`app:app`) and `python app.py`.
-- **`db.py`** — SQLite setup, `get_db()`, `init_db()`, `get_setting()`/`set_setting()`, `_db_lock`.
-- **`prowlarr.py`** — Prowlarr API search (`prowlarr_search_raw`), `hash_result()`, `format_size()`.
-- **`worker.py`** — `Priority`, `Job`, `WorkQueue` class, `work_queue` singleton.
-- **`scheduler.py`** — `Scheduler` class, `scheduler` singleton.
-- **`callbacks.py`** — `process_query_result()`, `process_seed_result()`, `_insert_result()`.
-- **`notifications.py`** — `notify_new_results()`, `notify_error()` via Apprise.
-- **`routes.py`** — Flask Blueprint (`bp`) with all HTTP routes and template filters.
-
 **Key subsystems:**
 
 - **`WorkQueue`** (`worker.py`) — single worker thread draining a `PriorityQueue`. All Prowlarr searches go through `work_queue.submit()` which returns a `Job` immediately (non-blocking). The worker executes one search at a time with a configurable min gap (`min_query_interval` setting). Jobs have `Priority.HIGH` (interactive: preview, seed, run-now) or `Priority.LOW` (scheduled). Completed jobs are stored in memory with a 5-minute TTL for polling. Each job can have a `callback` invoked by the worker after the search.
@@ -108,9 +89,7 @@ The app is available at `http://localhost:5000`. Data is persisted in `./data/`.
 - 1 scheduler daemon thread — enqueues due queries, never executes searches
 - 1 work-queue daemon thread — sole executor of all Prowlarr API calls
 
-**Preview flow:** POST `/api/search-preview` submits a job and returns an HTMX polling div. GET `/api/job/<id>/preview` returns status text while queued/running, then swaps in final results (stopping the poll via outerHTML replacement without `hx-trigger`).
-
-**Templates** (`templates/`): Jinja2 + HTMX. `base.html` has all CSS (dark theme). `_results_fragment.html` is the HTMX partial for search preview. `/api/queue-status` is polled by JS for live Queued/Running badges on query cards.
+**Preview flow:** POST `/api/search-preview` submits a job and returns `{"jobId": ...}` (202). The frontend polls GET `/api/jobs/<job_id>` — status while queued/running, results (or error) once done. GET `/api/queue-status` returns live per-query Queued/Running state (plus preview state) for the badges on query cards.
 
 ## Ruff config
 
