@@ -132,7 +132,7 @@ importers:
         version: 0.2.6
       cronstrue:
         specifier: ^3.24.0
-        version: 3.24.0
+        version: 3.25.0
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
@@ -1250,8 +1250,8 @@ packages:
       typescript:
         optional: true
 
-  cronstrue@3.24.0:
-    resolution: {integrity: sha512-t/Ji3Ur2c/pzhIAWNwC0ftl3JAE4dLfCjAdZoTZXmPDZwcispnS1PaMcMS4OmIIXyIVouAz+yw+mfQiE3hz5OQ==}
+  cronstrue@3.25.0:
+    resolution: {integrity: sha512-PAPaioNXHMLiUSM8V5sC0bIx5MALUQjjtuDZZWBir5Tau8D676Aoj3Oju/SCaggi4eLG+QPC3IU+dCo30AzDIA==}
     hasBin: true
 
   cross-spawn@7.0.6:
@@ -3897,7 +3897,7 @@ snapshots:
     optionalDependencies:
       typescript: 6.0.3
 
-  cronstrue@3.24.0: {}
+  cronstrue@3.25.0: {}
 
   cross-spawn@7.0.6:
     dependencies:
