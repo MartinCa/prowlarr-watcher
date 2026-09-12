@@ -1,0 +1,14 @@
+pre-commit:
+  commands:
+    lint:
+      root: "frontend/"
+    format:
+      root: "frontend/"
+    lint-python:
+      glob: "*.{py,pyi}"
+      run: uvx ruff check --fix {staged_files}
+      stage_fixed: true
+    format-python:
+      glob: "*.{py,pyi}"
+      run: uvx ruff format {staged_files}
+      stage_fixed: true

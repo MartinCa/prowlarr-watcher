@@ -54,6 +54,21 @@ pnpm lint              # eslint
 pnpm build             # vite build && tsc -b
 ```
 
+## Git hooks
+
+Local hooks are installed automatically by `pnpm install` (the `prepare` script runs `lefthook install` — idempotent, safe to re-run).
+
+Hooks come from the shared `MartinCa/lefthook-configs` fragments pinned at `v1.0.1` in `lefthook.yml` (a thin `remotes:` config). `remotes:` configs merge *over* `lefthook.yml`, so this repo's adaptations live in `lefthook-local.yml` (the one layer that overrides remotes): it adds `root: "frontend/"` to the shared TS lint/format commands so they run inside `frontend/` (inheriting the fragment's globs and `stage_fixed` handling), and it defines the Python commands (`lint-python`/`format-python`) directly — `langs/python.yml` cannot be consumed alongside `langs/ts.yml` because both define `pre-commit` commands named `lint`/`format`, and lefthook merges same-named commands key-by-key with the last one winning, so the earlier language's hooks would be silently destroyed. The local Python commands use exactly the fragment's commands (`uvx ruff check --fix` / `uvx ruff format` over the staged `*.{py,pyi}`), run from the repo root, and respect `pyproject.toml`'s `[tool.ruff]` (including `target-version = "py314"`, so the PEP 758 bare multi-`except` forms parse correctly under any sandbox Python).
+
+- **pre-commit** — TS lint/format via ESLint `--fix` + Prettier `--write` on staged TS/TSX and Prettier on JSON/CSS/MD/JS/MJS/HTML, run from `frontend/` and re-staging fixed files; Python lint/format via `uvx ruff check --fix` + `uvx ruff format` on staged `*.py`/`*.pyi`, re-staging fixed files. `lefthook-shared.yml` secret-scans the staged diff with `betterleaks` (blocks the commit on a leak) and audits staged `.github/workflows/*` files with `zizmor` (blocks on a finding).
+- **commit-msg** — `commit-msg.yml` enforces Conventional Commits, e.g. `feat: ...`, `fix(api): ...`.
+
+Lint/format are enforced both locally (these hooks) and in CI (the `lint` job runs `ruff check .` + `ruff format --check .` and `pnpm run lint` + `pnpm run format-check` + `tsc --noEmit` inside `frontend/`). The secret scan and Conventional-Commits validation are hook-only: CI runs pytest/frontend tests and uploads a zizmor SARIF report to code scanning — it does not run `betterleaks` or validate commit messages itself, and the zizmor CI job is a non-blocking SARIF report, not a merge gate. Do not bypass the hooks.
+
+Two hook tools must be on `PATH`: `betterleaks` (secret scan, install per its project README) and `zizmor` (workflow audit, install from zizmor.sh). If a tool is missing, `LEFTHOOK=0 git commit` skips the hooks entirely — a pragmatic escape hatch for restricted setups, not a way to dodge the gates.
+
+`lefthook-local.yml` is **intentionally checked in** as this repo's team-wide override: in a stock lefthook setup that file is the personal, gitignored override layer, but here it is the one layer that merges *over* the shared `remotes:` fragments, and it carries the repo-wide `frontend/` root override plus the Python command adaptation (the `langs/python.yml` collision noted above). It is not a personal override layer in this repo; do not use it for private changes.
+
 ## Running locally
 
 ```bash
