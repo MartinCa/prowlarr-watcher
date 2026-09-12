@@ -1,4 +1,4 @@
-name: Publish to GitHub
+name: Publish
 
 on:
   release:
@@ -10,9 +10,15 @@ env:
 
 permissions: {}
 
+concurrency:
+  group: publish-${{ github.ref }}
+  # Never cancel a publish midway: a half-pushed multi-arch manifest is worse
+  # than waiting for the previous run to finish.
+  cancel-in-progress: false
+
 jobs:
   push_to_registry:
-    name: Push Docker image to GitHub
+    name: Push Docker image to GHCR
     runs-on: ubuntu-latest
     permissions:
       contents: read
