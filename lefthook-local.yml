@@ -4,3 +4,7 @@ pre-commit:
       root: "frontend/"
     format-ts:
       root: "frontend/"
+pre-push:
+  commands:
+    test-ts:
+      root: "frontend/"
