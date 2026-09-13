@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@martinrun/frontend-config": "0.2.6",
-    "@tanstack/router-plugin": "1.168.36",
+    "@tanstack/router-plugin": "1.168.37",
     "@types/node": "24.13.4",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
