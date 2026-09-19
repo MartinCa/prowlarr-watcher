@@ -72,6 +72,21 @@ Two hook tools must be on `PATH`: `betterleaks` (secret scan, install per its pr
 
 `lefthook-local.yml` is **intentionally checked in** as this repo's team-wide override: in a stock lefthook setup that file is the personal, gitignored override layer, but here it is the one layer that merges *over* the shared `remotes:` fragments, and it carries the repo-wide `frontend/` root override for the TS hooks. It is not a personal override layer in this repo; do not use it for private changes.
 
+## OpenCode commands
+
+The OpenCode commands in `.opencode/commands/` are vendored from `MartinCa/frontend-kit` (shadcn registry item `opencode-commands`). They live at the **repo root**, not under `frontend/`, because OpenCode discovers `.opencode/` by walking up from the session cwd to the git root — a repo-root session would never find a `frontend/.opencode/`.
+
+Refresh procedure:
+
+```bash
+cd frontend
+pnpm dlx shadcn@latest add MartinCa/frontend-kit/opencode-commands --overwrite
+cd ..
+mv frontend/.opencode .opencode
+```
+
+shadcn's `~` target anchors to the directory containing `components.json`, so the refresh writes to `frontend/.opencode/`; move it back to the repo root afterwards.
+
 ## Running locally
 
 ```bash
