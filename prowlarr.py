@@ -92,7 +92,13 @@ def prowlarr_search_raw(
 
 
 def hash_result(r: dict) -> str:
-    key = r.get("guid") or f"{r.get('title', '')}|{r.get('size', '')}"
+    """Identity of a result: the indexer plus its guid (or title|size as fallback).
+
+    The indexer is part of the key so the same release appearing on a second indexer
+    (e.g. a freeleech-filtered duplicate of a tracker) counts as a new result.
+    """
+    base = r.get("guid") or f"{r.get('title', '')}|{r.get('size', '')}"
+    key = f"{r.get('indexer') or ''}|{base}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 

@@ -100,17 +100,17 @@ def _insert_query(name="Test", query="ubuntu", cron=None, enabled=1, note=None):
         return cur.lastrowid
 
 
-def _insert_result(query_id, title="item1", guid=None):
+def _insert_result(query_id, title="item1", guid=None, indexer="test-indexer"):
     """Insert a result directly into the DB."""
     guid = guid or f"guid-{title}"
-    h = prowlarr.hash_result({"guid": guid, "title": title})
+    h = prowlarr.hash_result({"guid": guid, "title": title, "indexer": indexer})
     now = datetime.now(timezone.utc).isoformat()
     with db._db_lock, db.get_db() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO results "
             "(query_id, result_hash, title, indexer, size, guid, first_seen, is_new) "
             "VALUES (?,?,?,?,?,?,?,1)",
-            (query_id, h, title, "test-indexer", 1024, guid, now),
+            (query_id, h, title, indexer, 1024, guid, now),
         )
         conn.commit()
 
@@ -156,6 +156,16 @@ class TestHashResult:
 
     def test_different_guids_differ(self):
         assert prowlarr.hash_result({"guid": "a"}) != prowlarr.hash_result({"guid": "b"})
+
+    def test_same_guid_on_different_indexers_differs(self):
+        a = {"guid": "https://mam/t/1", "indexer": "Non-free MyAnonamouse"}
+        b = {"guid": "https://mam/t/1", "indexer": "MyAnonamouse"}
+        assert prowlarr.hash_result(a) != prowlarr.hash_result(b)
+
+    def test_same_title_size_on_different_indexers_differs(self):
+        a = {"title": "T", "size": 1, "indexer": "A"}
+        b = {"title": "T", "size": 1, "indexer": "B"}
+        assert prowlarr.hash_result(a) != prowlarr.hash_result(b)
 
     def test_empty_guid_falls_back(self):
         r = {"guid": "", "title": "T", "size": 1}
@@ -218,6 +228,43 @@ class TestDatabase:
         with db.get_db() as conn:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(queries)").fetchall()}
         assert "excluded_indexers" in cols
+
+    def test_migration_rewrites_hashes_to_include_indexer(self):
+        qid = _insert_query()
+        old_hash = prowlarr.hashlib.sha256(b"guid-1").hexdigest()[:16]
+        with db._db_lock, db.get_db() as conn:
+            conn.execute(
+                "INSERT INTO results (query_id, result_hash, title, indexer, size, guid,"
+                " first_seen, is_new) VALUES (?,?,?,?,?,?,?,0)",
+                (qid, old_hash, "T", "IdxA", 5, "guid-1", "2024-01-01T00:00:00+00:00"),
+            )
+            conn.execute("DELETE FROM settings WHERE key='migrated_indexer_scoped_hashes'")
+            conn.commit()
+
+        db.init_db()
+
+        expected = prowlarr.hash_result({"guid": "guid-1", "indexer": "IdxA"})
+        with db.get_db() as conn:
+            hashes = [r[0] for r in conn.execute("SELECT result_hash FROM results").fetchall()]
+        assert hashes == [expected]
+
+    def test_migration_logs_warning_on_hash_conflict(self, caplog):
+        qid = _insert_query()
+        target = prowlarr.hash_result({"guid": "g", "indexer": "IdxA"})
+        with db._db_lock, db.get_db() as conn:
+            for h, guid in (("old-hash", "g"), (target, "other")):
+                conn.execute(
+                    "INSERT INTO results (query_id, result_hash, title, indexer, guid,"
+                    " first_seen, is_new) VALUES (?,?,?,?,?,?,0)",
+                    (qid, h, "T", "IdxA", guid, "2024-01-01T00:00:00+00:00"),
+                )
+            conn.execute("DELETE FROM settings WHERE key='migrated_indexer_scoped_hashes'")
+            conn.commit()
+
+        with caplog.at_level("WARNING", logger="prowlarr-watcher"):
+            db.init_db()
+
+        assert "uniqueness conflict" in caplog.text
 
     def test_migration_backfills_last_new_result_from_results(self, tmp_path, monkeypatch):
         db_path = tmp_path / "migration_test.db"
@@ -814,7 +861,9 @@ class TestProcessQueryResult:
     def test_duplicate_results_skipped(self):
         _configure_prowlarr()
         qid = _insert_query()
-        _insert_result(qid, title="Ubuntu 24.04 LTS", guid="guid-ubuntu-2404")
+        _insert_result(
+            qid, title="Ubuntu 24.04 LTS", guid="guid-ubuntu-2404", indexer="TestIndexer"
+        )
 
         job = worker.Job(status="done", result=SAMPLE_RESULTS)
         callbacks.process_query_result(qid, "0 * * * *", job)
@@ -823,6 +872,26 @@ class TestProcessQueryResult:
             results = conn.execute("SELECT * FROM results WHERE query_id=?", (qid,)).fetchall()
         # 1 existing + 1 new (the 23.10 one)
         assert len(results) == 2
+
+    def test_same_release_on_second_indexer_is_new_and_notifies(self):
+        qid = _insert_query()
+        _insert_result(qid, title="Book", guid="https://mam/t/1", indexer="Non-free MyAnonamouse")
+        dup = {
+            "title": "Book",
+            "indexer": "MyAnonamouse",
+            "size": 1024,
+            "guid": "https://mam/t/1",
+        }
+        job = worker.Job(status="done", result=[dup])
+
+        with patch("callbacks.notify_new_results") as notify:
+            callbacks.process_query_result(qid, "0 * * * *", job)
+
+        notify.assert_called_once()
+        assert notify.call_args.args[2] == [dup]
+        with db.get_db() as conn:
+            n = conn.execute("SELECT COUNT(*) FROM results WHERE query_id=?", (qid,)).fetchone()[0]
+        assert n == 2
 
     def test_updates_last_run_and_count(self):
         qid = _insert_query()
@@ -848,7 +917,7 @@ class TestProcessQueryResult:
     def test_last_new_result_unchanged_when_no_new_items(self):
         qid = _insert_query()
         for r in SAMPLE_RESULTS:
-            _insert_result(qid, title=r["title"], guid=r["guid"])
+            _insert_result(qid, title=r["title"], guid=r["guid"], indexer=r["indexer"])
 
         job = worker.Job(status="done", result=SAMPLE_RESULTS)
         callbacks.process_query_result(qid, "0 * * * *", job)
@@ -897,7 +966,7 @@ class TestProcessQueryResult:
         qid = _insert_query()
         # Pre-insert all results
         for r in SAMPLE_RESULTS:
-            _insert_result(qid, title=r["title"], guid=r["guid"])
+            _insert_result(qid, title=r["title"], guid=r["guid"], indexer=r["indexer"])
 
         job = worker.Job(status="done", result=SAMPLE_RESULTS)
         callbacks.process_query_result(qid, "0 * * * *", job)
