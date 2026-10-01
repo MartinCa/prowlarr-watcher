@@ -248,6 +248,24 @@ class TestDatabase:
             hashes = [r[0] for r in conn.execute("SELECT result_hash FROM results").fetchall()]
         assert hashes == [expected]
 
+    def test_migration_logs_warning_on_hash_conflict(self, caplog):
+        qid = _insert_query()
+        target = prowlarr.hash_result({"guid": "g", "indexer": "IdxA"})
+        with db._db_lock, db.get_db() as conn:
+            for h, guid in (("old-hash", "g"), (target, "other")):
+                conn.execute(
+                    "INSERT INTO results (query_id, result_hash, title, indexer, guid,"
+                    " first_seen, is_new) VALUES (?,?,?,?,?,?,0)",
+                    (qid, h, "T", "IdxA", guid, "2024-01-01T00:00:00+00:00"),
+                )
+            conn.execute("DELETE FROM settings WHERE key='migrated_indexer_scoped_hashes'")
+            conn.commit()
+
+        with caplog.at_level("WARNING", logger="prowlarr-watcher"):
+            db.init_db()
+
+        assert "uniqueness conflict" in caplog.text
+
     def test_migration_backfills_last_new_result_from_results(self, tmp_path, monkeypatch):
         db_path = tmp_path / "migration_test.db"
         monkeypatch.setattr(db, "DATA_DIR", tmp_path)
