@@ -105,7 +105,7 @@ The app is available at `http://localhost:5000`. Data is persisted in `./data/`.
 - All settings are stored in SQLite `settings` table, not environment variables.
 - Untrusted URLs from indexers (`infoUrl`, `downloadUrl`) must be sanitized (`http:`, `https:`, `magnet:` only) to prevent stored XSS.
 - The scheduler runs in a daemon thread inside the gunicorn worker. Only 1 gunicorn worker is used to avoid multiple scheduler instances.
-- New results are detected by hashing the `guid` (or `title|size` as fallback). Results are seeded silently on first add.
+- New results are detected by hashing the indexer name plus the `guid` (or `title|size` as fallback), so the same release on a second indexer (e.g. a freeleech-filtered duplicate tracker) notifies. Stored hashes were migrated to this scheme once (`migrated_indexer_scoped_hashes`). Results are seeded silently on first add.
 
 ## Architecture
 

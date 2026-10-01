@@ -112,6 +112,33 @@ def init_db():
             )
             conn.commit()
 
+        _migrate_indexer_scoped_hashes(conn)
+
+
+def _migrate_indexer_scoped_hashes(conn: sqlite3.Connection):
+    """Rewrite stored result hashes to include the indexer (see prowlarr.hash_result)."""
+    key = "migrated_indexer_scoped_hashes"
+    if conn.execute("SELECT 1 FROM settings WHERE key=?", (key,)).fetchone():
+        return
+    # Imported lazily: prowlarr imports this module.
+    from prowlarr import hash_result
+
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(results)").fetchall()}
+    if not {"title", "indexer", "size", "guid"} <= cols:
+        return  # ancient schema without the columns needed to recompute hashes
+    rows = conn.execute("SELECT id, title, indexer, size, guid FROM results").fetchall()
+    for row in rows:
+        if not row["guid"] and row["title"] is None:
+            continue  # nothing to recompute the hash from
+        r = {"title": row["title"], "indexer": row["indexer"], "guid": row["guid"]}
+        if row["size"] is not None:
+            r["size"] = row["size"]
+        conn.execute(
+            "UPDATE OR IGNORE results SET result_hash=? WHERE id=?", (hash_result(r), row["id"])
+        )
+    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, '1')", (key,))
+    conn.commit()
+
 
 def get_setting(key: str, default: str = "") -> str:
     with get_db() as conn:
