@@ -4,811 +4,811 @@
  */
 
 export interface paths {
-    "/queries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List all queries */
-        get: operations["listQueries"];
-        put?: never;
-        /** Create a query (seeds existing results silently) */
-        post: operations["createQuery"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+  "/queries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/queries/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["QueryId"];
-            };
-            cookie?: never;
-        };
-        /** Get a query and its results */
-        get: operations["getQuery"];
-        put?: never;
-        post?: never;
-        /** Delete a query and its results */
-        delete: operations["deleteQuery"];
-        options?: never;
-        head?: never;
-        /** Partially update a query (enabled, cron, note, or excludedIndexers) */
-        patch: operations["updateQuery"];
-        trace?: never;
+    /** List all queries */
+    get: operations["listQueries"];
+    put?: never;
+    /** Create a query (seeds existing results silently) */
+    post: operations["createQuery"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/queries/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
     };
-    "/queries/{id}/results": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["QueryId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Forget all stored results of a query so they notify again */
-        delete: operations["clearQueryResults"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get a query and its results */
+    get: operations["getQuery"];
+    put?: never;
+    post?: never;
+    /** Delete a query and its results */
+    delete: operations["deleteQuery"];
+    options?: never;
+    head?: never;
+    /** Partially update a query (enabled, cron, note, or excludedIndexers) */
+    patch: operations["updateQuery"];
+    trace?: never;
+  };
+  "/queries/{id}/results": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
     };
-    "/queries/{id}/results/{resultId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["QueryId"];
-                resultId: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Forget one stored result so it notifies again */
-        delete: operations["deleteResult"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Forget all stored results of a query so they notify again */
+    delete: operations["clearQueryResults"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/queries/{id}/results/{resultId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+        resultId: number;
+      };
+      cookie?: never;
     };
-    "/results/indexers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Indexers that have stored results, with counts */
-        get: operations["listResultIndexers"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Forget one stored result so it notifies again */
+    delete: operations["deleteResult"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/results/indexers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/results": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Forget all stored results from one indexer across all queries */
-        delete: operations["clearIndexerResults"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Indexers that have stored results, with counts */
+    get: operations["listResultIndexers"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/results": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/queries/{id}/run": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["QueryId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Run a query now (interactive priority) */
-        post: operations["runQuery"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Forget all stored results from one indexer across all queries (200 with deleted: 0 if nothing matched) */
+    delete: operations["clearIndexerResults"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/queries/{id}/run": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
     };
-    "/search-preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Submit an ad-hoc preview search */
-        post: operations["searchPreview"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Run a query now (interactive priority) */
+    post: operations["runQuery"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/search-preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/jobs/{jobId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                jobId: string;
-            };
-            cookie?: never;
-        };
-        /** Poll a search job's status and results */
-        get: operations["getJob"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Submit an ad-hoc preview search */
+    post: operations["searchPreview"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/jobs/{jobId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        jobId: string;
+      };
+      cookie?: never;
     };
-    "/queue-status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Live work-queue state for UI polling */
-        get: operations["getQueueStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Poll a search job's status and results */
+    get: operations["getJob"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/queue-status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/indexers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List configured Prowlarr indexers */
-        get: operations["listIndexers"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Live work-queue state for UI polling */
+    get: operations["getQueueStatus"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/indexers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get current settings */
-        get: operations["getSettings"];
-        /** Replace settings */
-        put: operations["putSettings"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List configured Prowlarr indexers */
+    get: operations["listIndexers"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/settings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/settings/test-prowlarr": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Test connectivity to a Prowlarr instance */
-        post: operations["testProwlarr"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get current settings */
+    get: operations["getSettings"];
+    /** Replace settings */
+    put: operations["putSettings"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/settings/test-prowlarr": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/settings/test-apprise": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send a test Apprise notification */
-        post: operations["testApprise"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Test connectivity to a Prowlarr instance */
+    post: operations["testProwlarr"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/settings/test-apprise": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
+    get?: never;
+    put?: never;
+    /** Send a test Apprise notification */
+    post: operations["testApprise"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        Query: {
-            id: number;
-            name: string;
-            query: string;
-            cron: string | null;
-            enabled: boolean;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            lastRun: string | null;
-            /** Format: date-time */
-            nextRun: string | null;
-            lastCount: number | null;
-            lastError: string | null;
-            /** Format: date-time */
-            lastNewResult: string | null;
-            /** @description null means: inherit the default exclusion list from Settings */
-            excludedIndexers: number[] | null;
-            /** @description Optional note shown as the first line of new-result notifications */
-            note: string | null;
-        };
-        QueryDetail: components["schemas"]["Query"] & {
-            results: components["schemas"]["Result"][];
-        };
-        Result: {
-            id: number;
-            resultHash: string;
-            title: string | null;
-            indexer: string | null;
-            size: number | null;
-            guid: string | null;
-            infoUrl: string | null;
-            downloadUrl: string | null;
-            seeders: number | null;
-            /** Format: date-time */
-            firstSeen: string;
-            isNew: boolean;
-        };
-        PreviewResult: {
-            title?: string | null;
-            indexer?: string | null;
-            size?: number | null;
-            seeders?: number | null;
-            guid?: string | null;
-            infoUrl?: string | null;
-            downloadUrl?: string | null;
-        };
-        CreateQueryRequest: {
-            query: string;
-            name?: string;
-            cron?: string;
-            note?: string;
-        };
-        UpdateQueryRequest: {
-            enabled?: boolean;
-            cron?: string | null;
-            excludedIndexers?: number[] | null;
-            note?: string | null;
-        };
-        Job: {
-            /** @enum {string} */
-            status: "queued" | "running" | "retrying" | "done" | "error";
-            error?: string;
-            results?: components["schemas"]["PreviewResult"][];
-        };
-        ResultIndexer: {
-            name: string;
-            count: number;
-        };
-        DeletedCount: {
-            deleted: number;
-        };
-        QueueStatus: {
-            queries: {
-                [key: string]: "queued" | "running";
-            };
-            /** @enum {string|null} */
-            preview: "queued" | "running" | null;
-        };
-        Indexer: {
-            id: number;
-            name: string;
-            enable: boolean;
-        };
-        Settings: {
-            prowlarrUrl: string;
-            prowlarrApiKey: string;
-            prowlarrExternalUrl: string;
-            defaultCron: string;
-            minQueryInterval: number;
-            maxRetries: number;
-            prowlarrTimeout: number;
-            appriseUrls: string;
-            defaultExcludedIndexers: number[];
-        };
-        TestResult: {
-            ok: boolean;
-            message: string;
-        };
-        ProblemDetails: {
-            type?: string;
-            title: string;
-            status: number;
-            detail?: string;
-            instance?: string;
-            errors?: {
-                [key: string]: string[];
-            };
-        };
+  schemas: {
+    Query: {
+      id: number;
+      name: string;
+      query: string;
+      cron: string | null;
+      enabled: boolean;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      lastRun: string | null;
+      /** Format: date-time */
+      nextRun: string | null;
+      lastCount: number | null;
+      lastError: string | null;
+      /** Format: date-time */
+      lastNewResult: string | null;
+      /** @description null means: inherit the default exclusion list from Settings */
+      excludedIndexers: number[] | null;
+      /** @description Optional note shown as the first line of new-result notifications */
+      note: string | null;
     };
-    responses: {
-        /** @description RFC 9457 problem details */
-        Problem: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/problem+json": components["schemas"]["ProblemDetails"];
-            };
-        };
+    QueryDetail: components["schemas"]["Query"] & {
+      results: components["schemas"]["Result"][];
     };
-    parameters: {
-        QueryId: number;
+    Result: {
+      id: number;
+      resultHash: string;
+      title: string | null;
+      indexer: string | null;
+      size: number | null;
+      guid: string | null;
+      infoUrl: string | null;
+      downloadUrl: string | null;
+      seeders: number | null;
+      /** Format: date-time */
+      firstSeen: string;
+      isNew: boolean;
     };
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    PreviewResult: {
+      title?: string | null;
+      indexer?: string | null;
+      size?: number | null;
+      seeders?: number | null;
+      guid?: string | null;
+      infoUrl?: string | null;
+      downloadUrl?: string | null;
+    };
+    CreateQueryRequest: {
+      query: string;
+      name?: string;
+      cron?: string;
+      note?: string;
+    };
+    UpdateQueryRequest: {
+      enabled?: boolean;
+      cron?: string | null;
+      excludedIndexers?: number[] | null;
+      note?: string | null;
+    };
+    Job: {
+      /** @enum {string} */
+      status: "queued" | "running" | "retrying" | "done" | "error";
+      error?: string;
+      results?: components["schemas"]["PreviewResult"][];
+    };
+    ResultIndexer: {
+      name: string;
+      count: number;
+    };
+    DeletedCount: {
+      deleted: number;
+    };
+    QueueStatus: {
+      queries: {
+        [key: string]: "queued" | "running";
+      };
+      /** @enum {string|null} */
+      preview: "queued" | "running" | null;
+    };
+    Indexer: {
+      id: number;
+      name: string;
+      enable: boolean;
+    };
+    Settings: {
+      prowlarrUrl: string;
+      prowlarrApiKey: string;
+      prowlarrExternalUrl: string;
+      defaultCron: string;
+      minQueryInterval: number;
+      maxRetries: number;
+      prowlarrTimeout: number;
+      appriseUrls: string;
+      defaultExcludedIndexers: number[];
+    };
+    TestResult: {
+      ok: boolean;
+      message: string;
+    };
+    ProblemDetails: {
+      type?: string;
+      title: string;
+      status: number;
+      detail?: string;
+      instance?: string;
+      errors?: {
+        [key: string]: string[];
+      };
+    };
+  };
+  responses: {
+    /** @description RFC 9457 problem details */
+    Problem: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/problem+json": components["schemas"]["ProblemDetails"];
+      };
+    };
+  };
+  parameters: {
+    QueryId: number;
+  };
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listQueries: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Query"][];
-                };
-            };
-        };
+  listQueries: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    createQuery: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateQueryRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["Query"][];
         };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Query"];
-                };
-            };
-            400: components["responses"]["Problem"];
-        };
+      };
     };
-    getQuery: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["QueryId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QueryDetail"];
-                };
-            };
-            404: components["responses"]["Problem"];
-        };
+  };
+  createQuery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    deleteQuery: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["QueryId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["Problem"];
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateQueryRequest"];
+      };
     };
-    updateQuery: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["QueryId"];
-            };
-            cookie?: never;
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateQueryRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["Query"];
         };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Query"];
-                };
-            };
-            404: components["responses"]["Problem"];
-        };
+      };
+      400: components["responses"]["Problem"];
     };
-    clearQueryResults: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["QueryId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeletedCount"];
-                };
-            };
-            404: components["responses"]["Problem"];
-        };
+  };
+  getQuery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
     };
-    deleteResult: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["QueryId"];
-                resultId: number;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["Problem"];
+        content: {
+          "application/json": components["schemas"]["QueryDetail"];
         };
+      };
+      404: components["responses"]["Problem"];
     };
-    listResultIndexers: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        indexers: components["schemas"]["ResultIndexer"][];
-                    };
-                };
-            };
-        };
+  };
+  deleteQuery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
     };
-    clearIndexerResults: {
-        parameters: {
-            query: {
-                indexer: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeletedCount"];
-                };
-            };
-            400: components["responses"]["Problem"];
-        };
+        content?: never;
+      };
+      404: components["responses"]["Problem"];
     };
-    runQuery: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["QueryId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Accepted */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["Problem"];
-        };
+  };
+  updateQuery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
     };
-    searchPreview: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    query: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Accepted */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        jobId: string;
-                    };
-                };
-            };
-            400: components["responses"]["Problem"];
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateQueryRequest"];
+      };
     };
-    getJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                jobId: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Job"];
-                };
-            };
-            404: components["responses"]["Problem"];
+        content: {
+          "application/json": components["schemas"]["Query"];
         };
+      };
+      404: components["responses"]["Problem"];
     };
-    getQueueStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QueueStatus"];
-                };
-            };
-        };
+  };
+  clearQueryResults: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
     };
-    listIndexers: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        indexers: components["schemas"]["Indexer"][];
-                    };
-                };
-            };
-            400: components["responses"]["Problem"];
-            502: components["responses"]["Problem"];
+        content: {
+          "application/json": components["schemas"]["DeletedCount"];
         };
+      };
+      404: components["responses"]["Problem"];
     };
-    getSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Settings"];
-                };
-            };
-        };
+  };
+  deleteResult: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+        resultId: number;
+      };
+      cookie?: never;
     };
-    putSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Settings"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Settings"];
-                };
-            };
-        };
+        content?: never;
+      };
+      404: components["responses"]["Problem"];
     };
-    testProwlarr: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    prowlarrUrl?: string;
-                    prowlarrApiKey?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TestResult"];
-                };
-            };
-        };
+  };
+  listResultIndexers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    testApprise: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": {
-                    appriseUrls?: string;
-                };
-            };
+        content: {
+          "application/json": {
+            indexers: components["schemas"]["ResultIndexer"][];
+          };
         };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TestResult"];
-                };
-            };
-        };
+      };
     };
+  };
+  clearIndexerResults: {
+    parameters: {
+      query: {
+        indexer: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeletedCount"];
+        };
+      };
+      400: components["responses"]["Problem"];
+    };
+  };
+  runQuery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["Problem"];
+    };
+  };
+  searchPreview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          query: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            jobId: string;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+    };
+  };
+  getJob: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        jobId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Job"];
+        };
+      };
+      404: components["responses"]["Problem"];
+    };
+  };
+  getQueueStatus: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["QueueStatus"];
+        };
+      };
+    };
+  };
+  listIndexers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            indexers: components["schemas"]["Indexer"][];
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      502: components["responses"]["Problem"];
+    };
+  };
+  getSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Settings"];
+        };
+      };
+    };
+  };
+  putSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["Settings"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Settings"];
+        };
+      };
+    };
+  };
+  testProwlarr: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          prowlarrUrl?: string;
+          prowlarrApiKey?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TestResult"];
+        };
+      };
+    };
+  };
+  testApprise: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          appriseUrls?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TestResult"];
+        };
+      };
+    };
+  };
 }

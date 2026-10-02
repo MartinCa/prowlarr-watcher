@@ -11,7 +11,6 @@ export function ClearIndexerResults() {
   const [selected, setSelected] = useState("");
 
   const options = indexers.data?.indexers ?? [];
-  if (options.length === 0) return null;
   const current = options.find((i) => i.name === selected);
 
   function handleClear() {
@@ -37,6 +36,7 @@ export function ClearIndexerResults() {
         aria-label="Indexer to clear results from"
         className="border-input bg-background h-8 rounded-md border px-2 text-xs"
         value={current ? selected : ""}
+        disabled={options.length === 0}
         onChange={(e) => setSelected(e.target.value)}
       >
         <option value="">Clear results from indexer…</option>

@@ -160,6 +160,7 @@ export function StoredResultsTable({
                 {formatRelativeTime(r.firstSeen)}
               </TableCell>
               <TableCell>
+                {/* No confirm: clearing one row is cheap and undone by the next run re-finding it. */}
                 <Button
                   size="sm"
                   variant="ghost"

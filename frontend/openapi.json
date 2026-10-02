@@ -148,7 +148,7 @@
     "/results": {
       "delete": {
         "operationId": "clearIndexerResults",
-        "summary": "Forget all stored results from one indexer across all queries",
+        "summary": "Forget all stored results from one indexer across all queries (200 with deleted: 0 if nothing matched)",
         "parameters": [
           { "name": "indexer", "in": "query", "required": true, "schema": { "type": "string" } }
         ],
