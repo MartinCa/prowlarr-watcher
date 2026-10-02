@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AddQueryDialog } from "@/features/queries/components/AddQueryDialog";
+import { ClearIndexerResults } from "@/features/queries/components/ClearIndexerResults";
 import { QueryCard } from "@/features/queries/components/QueryCard";
 import { useQueries, useQueueStatus } from "@/features/queries/hooks";
 import { useSettings } from "@/features/settings/hooks";
@@ -58,6 +59,7 @@ function QueryListPage() {
             : `${queries.data.length} configured`}
         </span>
         <div className="flex-1" />
+        <ClearIndexerResults />
         <AddQueryDialog defaultCron={defaultCron} />
       </div>
 

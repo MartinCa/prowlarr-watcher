@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -79,7 +80,13 @@ export function ResultsTable({ results }: { results: PreviewResult[] }) {
   );
 }
 
-export function StoredResultsTable({ results }: { results: Result[] }) {
+export function StoredResultsTable({
+  results,
+  onClear,
+}: {
+  results: Result[];
+  onClear: (result: Result) => void;
+}) {
   if (results.length === 0) {
     return (
       <p className="text-muted-foreground py-10 text-center text-sm">
@@ -97,6 +104,7 @@ export function StoredResultsTable({ results }: { results: Result[] }) {
           <TableHead>Size</TableHead>
           <TableHead>Seeders</TableHead>
           <TableHead>First seen</TableHead>
+          <TableHead></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -150,6 +158,17 @@ export function StoredResultsTable({ results }: { results: Result[] }) {
               <TableCell className={seederColor(r.seeders)}>{r.seeders ?? "—"}</TableCell>
               <TableCell className="text-muted-foreground font-mono text-xs whitespace-nowrap">
                 {formatRelativeTime(r.firstSeen)}
+              </TableCell>
+              <TableCell>
+                {/* No confirm: clearing one row is cheap and undone by the next run re-finding it. */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title="Clear this result so it is notified about again"
+                  onClick={() => onClear(r)}
+                >
+                  Clear
+                </Button>
               </TableCell>
             </TableRow>
           );

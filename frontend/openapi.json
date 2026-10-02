@@ -3,9 +3,11 @@
   "info": {
     "title": "Prowlarr Watcher API",
     "version": "1.0.0",
+    "license": { "name": "MIT", "identifier": "MIT" },
     "description": "Hand-authored spec for the Flask JSON API — kept in sync with routes.py by hand (see DESIGN.md section 9). src/lib/api-types.ts is generated from this file via openapi-typescript and must never be hand-edited."
   },
   "servers": [{ "url": "/api" }],
+  "security": [],
   "paths": {
     "/queries": {
       "get": {
@@ -82,6 +84,84 @@
         "responses": {
           "204": { "description": "No Content" },
           "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/queries/{id}/results": {
+      "parameters": [{ "$ref": "#/components/parameters/QueryId" }],
+      "delete": {
+        "operationId": "clearQueryResults",
+        "summary": "Forget all stored results of a query so they notify again",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/DeletedCount" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/queries/{id}/results/{resultId}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/QueryId" },
+        {
+          "name": "resultId",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "integer" }
+        }
+      ],
+      "delete": {
+        "operationId": "deleteResult",
+        "summary": "Forget one stored result so it notifies again",
+        "responses": {
+          "204": { "description": "No Content" },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/results/indexers": {
+      "get": {
+        "operationId": "listResultIndexers",
+        "summary": "Indexers that have stored results, with counts",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["indexers"],
+                  "properties": {
+                    "indexers": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ResultIndexer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/results": {
+      "delete": {
+        "operationId": "clearIndexerResults",
+        "summary": "Forget all stored results from one indexer across all queries (200 with deleted: 0 if nothing matched)",
+        "parameters": [
+          { "name": "indexer", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/DeletedCount" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" }
         }
       }
     },
@@ -216,6 +296,7 @@
           }
         },
         "responses": {
+          "400": { "$ref": "#/components/responses/Problem" },
           "200": {
             "description": "OK",
             "content": {
@@ -428,6 +509,16 @@
             "items": { "$ref": "#/components/schemas/PreviewResult" }
           }
         }
+      },
+      "ResultIndexer": {
+        "type": "object",
+        "required": ["name", "count"],
+        "properties": { "name": { "type": "string" }, "count": { "type": "integer" } }
+      },
+      "DeletedCount": {
+        "type": "object",
+        "required": ["deleted"],
+        "properties": { "deleted": { "type": "integer" } }
       },
       "QueueStatus": {
         "type": "object",

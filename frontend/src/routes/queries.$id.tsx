@@ -11,11 +11,14 @@ import { Label } from "@/components/ui/label";
 import { IndexerChecklist } from "@/features/queries/components/IndexerChecklist";
 import { StoredResultsTable } from "@/features/queries/components/ResultsTable";
 import {
+  useClearQueryResults,
   useDeleteQuery,
+  useDeleteResult,
   useQueryDetail,
   useRunQuery,
   useUpdateQuery,
 } from "@/features/queries/hooks";
+import type { Result } from "@/lib/types";
 import { useSettings } from "@/features/settings/hooks";
 import { ApiError } from "@/lib/api";
 import {
@@ -37,6 +40,8 @@ function QueryDetailPage() {
   const updateQuery = useUpdateQuery(qid);
   const deleteQuery = useDeleteQuery();
   const runQuery = useRunQuery();
+  const deleteResult = useDeleteResult(qid);
+  const clearResults = useClearQueryResults(qid);
 
   const settingsRef = useRef<HTMLDetailsElement>(null);
 
@@ -82,6 +87,26 @@ function QueryDetailPage() {
           toast.error(error instanceof ApiError ? error.message : "Delete failed");
         }
       },
+    });
+  }
+
+  function onClearError(error: Error) {
+    toast.error(error instanceof ApiError ? error.message : "Clear failed");
+  }
+
+  function handleClearResult(result: Result) {
+    deleteResult.mutate(result.id, {
+      onSuccess: () => toast.success("Result cleared — it will notify again if seen"),
+      onError: onClearError,
+    });
+  }
+
+  function handleClearAll() {
+    if (!confirm("Clear all results of this query? They will all notify again on the next run."))
+      return;
+    clearResults.mutate(undefined, {
+      onSuccess: (data) => toast.success(`Cleared ${data.deleted} results`),
+      onError: onClearError,
     });
   }
 
@@ -221,9 +246,19 @@ function QueryDetailPage() {
             {newCount} new
           </Badge>
         )}
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={query.results.length === 0}
+            onClick={handleClearAll}
+          >
+            Clear all
+          </Button>
+        </div>
       </div>
       <div className="max-h-[70vh] overflow-auto rounded-md border">
-        <StoredResultsTable results={query.results} />
+        <StoredResultsTable results={query.results} onClear={handleClearResult} />
       </div>
 
       <details ref={settingsRef} className="group rounded-md border">

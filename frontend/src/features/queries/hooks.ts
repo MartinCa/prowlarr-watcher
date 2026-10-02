@@ -7,6 +7,7 @@ const queryKeys = {
   detail: (id: number) => ["queries", id] as const,
   queueStatus: ["queue-status"] as const,
   indexers: ["indexers"] as const,
+  resultIndexers: ["result-indexers"] as const,
   job: (jobId: string) => ["jobs", jobId] as const,
 };
 
@@ -72,6 +73,46 @@ export function useDeleteQuery() {
   return useMutation({
     mutationFn: (id: number) => queriesApi.remove(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.all }),
+  });
+}
+
+/** Clearing results changes what every query detail page shows, so refetch them all. */
+function useInvalidateQueries() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.resultIndexers });
+    return queryClient.invalidateQueries({ queryKey: queryKeys.all });
+  };
+}
+
+export function useDeleteResult(qid: number) {
+  const invalidate = useInvalidateQueries();
+  return useMutation({
+    mutationFn: (rid: number) => queriesApi.deleteResult(qid, rid),
+    onSuccess: invalidate,
+  });
+}
+
+export function useClearQueryResults(qid: number) {
+  const invalidate = useInvalidateQueries();
+  return useMutation({
+    mutationFn: () => queriesApi.clearResults(qid),
+    onSuccess: invalidate,
+  });
+}
+
+export function useResultIndexers() {
+  return useQuery({ queryKey: queryKeys.resultIndexers, queryFn: queriesApi.resultIndexers });
+}
+
+export function useClearIndexerResults() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (indexer: string) => queriesApi.clearIndexerResults(indexer),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.resultIndexers });
+    },
   });
 }
 

@@ -43,6 +43,79 @@ export interface paths {
     patch: operations["updateQuery"];
     trace?: never;
   };
+  "/queries/{id}/results": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Forget all stored results of a query so they notify again */
+    delete: operations["clearQueryResults"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/queries/{id}/results/{resultId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+        resultId: number;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Forget one stored result so it notifies again */
+    delete: operations["deleteResult"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/results/indexers": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Indexers that have stored results, with counts */
+    get: operations["listResultIndexers"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/results": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Forget all stored results from one indexer across all queries (200 with deleted: 0 if nothing matched) */
+    delete: operations["clearIndexerResults"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/queries/{id}/run": {
     parameters: {
       query?: never;
@@ -253,6 +326,13 @@ export interface components {
       error?: string;
       results?: components["schemas"]["PreviewResult"][];
     };
+    ResultIndexer: {
+      name: string;
+      count: number;
+    };
+    DeletedCount: {
+      deleted: number;
+    };
     QueueStatus: {
       queries: {
         [key: string]: "queued" | "running";
@@ -427,6 +507,96 @@ export interface operations {
       404: components["responses"]["Problem"];
     };
   };
+  clearQueryResults: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeletedCount"];
+        };
+      };
+      404: components["responses"]["Problem"];
+    };
+  };
+  deleteResult: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+        resultId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: components["responses"]["Problem"];
+    };
+  };
+  listResultIndexers: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            indexers: components["schemas"]["ResultIndexer"][];
+          };
+        };
+      };
+    };
+  };
+  clearIndexerResults: {
+    parameters: {
+      query: {
+        indexer: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DeletedCount"];
+        };
+      };
+      400: components["responses"]["Problem"];
+    };
+  };
   runQuery: {
     parameters: {
       query?: never;
@@ -586,6 +756,7 @@ export interface operations {
           "application/json": components["schemas"]["Settings"];
         };
       };
+      400: components["responses"]["Problem"];
     };
   };
   testProwlarr: {
