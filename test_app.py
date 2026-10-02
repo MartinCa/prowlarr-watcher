@@ -1446,6 +1446,16 @@ class TestClearResults:
         assert resp.get_json() == {"deleted": 2}
         assert self._count("indexer='y'") == 1
 
+    def test_list_result_indexers(self, client):
+        q1, q2 = _insert_query(name="a"), _insert_query(name="b")
+        _insert_result(q1, guid="a", indexer="x")
+        _insert_result(q2, guid="b", indexer="x")
+        _insert_result(q2, guid="c", indexer="y")
+        resp = client.get("/api/results/indexers")
+        assert resp.get_json() == {
+            "indexers": [{"name": "x", "count": 2}, {"name": "y", "count": 1}]
+        }
+
     def test_clear_indexer_requires_name(self, client):
         _insert_result(_insert_query(), guid="a")
         assert delete_json(client, "/api/results").status_code == 400

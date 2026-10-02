@@ -82,6 +82,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/results/indexers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Indexers that have stored results, with counts */
+        get: operations["listResultIndexers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/results": {
         parameters: {
             query?: never;
@@ -309,6 +326,10 @@ export interface components {
             error?: string;
             results?: components["schemas"]["PreviewResult"][];
         };
+        ResultIndexer: {
+            name: string;
+            count: number;
+        };
         DeletedCount: {
             deleted: number;
         };
@@ -529,6 +550,28 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Problem"];
+        };
+    };
+    listResultIndexers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        indexers: components["schemas"]["ResultIndexer"][];
+                    };
+                };
+            };
         };
     };
     clearIndexerResults: {

@@ -6,6 +6,7 @@ import type {
   Query,
   QueryDetail,
   QueueStatus,
+  ResultIndexer,
   UpdateQueryRequest,
 } from "@/lib/types";
 
@@ -17,6 +18,7 @@ export const queriesApi = {
   remove: (id: number) => api.delete<void>(`/queries/${id}`),
   deleteResult: (qid: number, rid: number) => api.delete<void>(`/queries/${qid}/results/${rid}`),
   clearResults: (qid: number) => api.delete<{ deleted: number }>(`/queries/${qid}/results`),
+  resultIndexers: () => api.get<{ indexers: ResultIndexer[] }>("/results/indexers"),
   clearIndexerResults: (indexer: string) =>
     api.delete<{ deleted: number }>("/results", { query: { indexer } }),
   run: (id: number) => api.post<void>(`/queries/${id}/run`),

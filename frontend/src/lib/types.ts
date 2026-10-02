@@ -11,3 +11,4 @@ export type QueueStatus = components["schemas"]["QueueStatus"];
 export type Indexer = components["schemas"]["Indexer"];
 export type Settings = components["schemas"]["Settings"];
 export type TestResult = components["schemas"]["TestResult"];
+export type ResultIndexer = components["schemas"]["ResultIndexer"];

@@ -318,6 +318,17 @@ def clear_query_results(qid: int):
     return jsonify({"deleted": cur.rowcount})
 
 
+@bp.route("/results/indexers", methods=["GET"])
+def list_result_indexers():
+    """Indexers with stored results, with counts, for the clear-by-indexer control."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT indexer, COUNT(*) AS n FROM results "
+            "WHERE indexer IS NOT NULL AND indexer != '' GROUP BY indexer ORDER BY indexer"
+        ).fetchall()
+    return jsonify({"indexers": [{"name": r["indexer"], "count": r["n"]} for r in rows]})
+
+
 @bp.route("/results", methods=["DELETE"])
 def clear_indexer_results():
     """Forget every stored result from one indexer, across all queries."""

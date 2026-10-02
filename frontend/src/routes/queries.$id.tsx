@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { IndexerChecklist } from "@/features/queries/components/IndexerChecklist";
 import { StoredResultsTable } from "@/features/queries/components/ResultsTable";
 import {
-  useClearIndexerResults,
   useClearQueryResults,
   useDeleteQuery,
   useDeleteResult,
@@ -43,7 +42,6 @@ function QueryDetailPage() {
   const runQuery = useRunQuery();
   const deleteResult = useDeleteResult(qid);
   const clearResults = useClearQueryResults(qid);
-  const clearIndexer = useClearIndexerResults();
 
   const settingsRef = useRef<HTMLDetailsElement>(null);
 
@@ -71,9 +69,6 @@ function QueryDetailPage() {
   const override = overrideEnabled ?? query.excludedIndexers !== null;
   const excluded = excludedDraft ?? query.excludedIndexers ?? [];
   const note = noteInput ?? query.note ?? "";
-  const indexerNames = [
-    ...new Set(query.results.map((r) => r.indexer).filter((i): i is string => !!i)),
-  ].sort();
   const newCount = query.results.filter((r) => r.isNew).length;
 
   function handleDelete() {
@@ -111,14 +106,6 @@ function QueryDetailPage() {
       return;
     clearResults.mutate(undefined, {
       onSuccess: (data) => toast.success(`Cleared ${data.deleted} results`),
-      onError: onClearError,
-    });
-  }
-
-  function handleClearIndexer(indexer: string) {
-    if (!confirm(`Clear all results from "${indexer}" across ALL queries?`)) return;
-    clearIndexer.mutate(indexer, {
-      onSuccess: (data) => toast.success(`Cleared ${data.deleted} results from ${indexer}`),
       onError: onClearError,
     });
   }
@@ -260,21 +247,6 @@ function QueryDetailPage() {
           </Badge>
         )}
         <div className="ml-auto flex items-center gap-2">
-          {indexerNames.length > 0 && (
-            <select
-              aria-label="Clear all results from an indexer across all queries"
-              className="border-input bg-background h-8 rounded-md border px-2 text-xs"
-              value=""
-              onChange={(e) => e.target.value && handleClearIndexer(e.target.value)}
-            >
-              <option value="">Clear indexer (all queries)…</option>
-              {indexerNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          )}
           <Button
             size="sm"
             variant="outline"

@@ -120,6 +120,31 @@
         }
       }
     },
+    "/results/indexers": {
+      "get": {
+        "operationId": "listResultIndexers",
+        "summary": "Indexers that have stored results, with counts",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["indexers"],
+                  "properties": {
+                    "indexers": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ResultIndexer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/results": {
       "delete": {
         "operationId": "clearIndexerResults",
@@ -481,6 +506,11 @@
             "items": { "$ref": "#/components/schemas/PreviewResult" }
           }
         }
+      },
+      "ResultIndexer": {
+        "type": "object",
+        "required": ["name", "count"],
+        "properties": { "name": { "type": "string" }, "count": { "type": "integer" } }
       },
       "DeletedCount": {
         "type": "object",
