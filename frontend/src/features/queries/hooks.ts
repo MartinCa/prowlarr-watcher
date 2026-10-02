@@ -75,6 +75,36 @@ export function useDeleteQuery() {
   });
 }
 
+/** Clearing results changes what every query detail page shows, so refetch them all. */
+function useInvalidateQueries() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: queryKeys.all });
+}
+
+export function useDeleteResult(qid: number) {
+  const invalidate = useInvalidateQueries();
+  return useMutation({
+    mutationFn: (rid: number) => queriesApi.deleteResult(qid, rid),
+    onSuccess: invalidate,
+  });
+}
+
+export function useClearQueryResults(qid: number) {
+  const invalidate = useInvalidateQueries();
+  return useMutation({
+    mutationFn: () => queriesApi.clearResults(qid),
+    onSuccess: invalidate,
+  });
+}
+
+export function useClearIndexerResults() {
+  const invalidate = useInvalidateQueries();
+  return useMutation({
+    mutationFn: (indexer: string) => queriesApi.clearIndexerResults(indexer),
+    onSuccess: invalidate,
+  });
+}
+
 export function useRunQuery() {
   const queryClient = useQueryClient();
   return useMutation({

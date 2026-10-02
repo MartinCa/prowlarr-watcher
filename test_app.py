@@ -1401,6 +1401,57 @@ class TestCreateQuery:
         assert q is None
 
 
+class TestClearResults:
+    def _count(self, where="1=1", args=()):
+        with db.get_db() as conn:
+            return conn.execute(f"SELECT COUNT(*) FROM results WHERE {where}", args).fetchone()[0]
+
+    def test_delete_single_result(self, client):
+        qid = _insert_query()
+        _insert_result(qid, title="a", guid="a")
+        _insert_result(qid, title="b", guid="b")
+        with db.get_db() as conn:
+            rid = conn.execute("SELECT id FROM results WHERE title='a'").fetchone()["id"]
+        assert delete_json(client, f"/api/queries/{qid}/results/{rid}").status_code == 204
+        assert self._count() == 1
+        assert delete_json(client, f"/api/queries/{qid}/results/{rid}").status_code == 404
+
+    def test_delete_result_wrong_query(self, client):
+        q1, q2 = _insert_query(name="a"), _insert_query(name="b")
+        _insert_result(q1, guid="a")
+        with db.get_db() as conn:
+            rid = conn.execute("SELECT id FROM results").fetchone()["id"]
+        assert delete_json(client, f"/api/queries/{q2}/results/{rid}").status_code == 404
+        assert self._count() == 1
+
+    def test_clear_query_results(self, client):
+        q1, q2 = _insert_query(name="a"), _insert_query(name="b")
+        _insert_result(q1, guid="a")
+        _insert_result(q1, guid="b")
+        _insert_result(q2, guid="c")
+        resp = delete_json(client, f"/api/queries/{q1}/results")
+        assert resp.status_code == 200
+        assert resp.get_json() == {"deleted": 2}
+        assert self._count() == 1
+
+    def test_clear_query_results_404(self, client):
+        assert delete_json(client, "/api/queries/9999/results").status_code == 404
+
+    def test_clear_indexer_results(self, client):
+        q1, q2 = _insert_query(name="a"), _insert_query(name="b")
+        _insert_result(q1, guid="a", indexer="x")
+        _insert_result(q2, guid="b", indexer="x")
+        _insert_result(q2, guid="c", indexer="y")
+        resp = delete_json(client, "/api/results?indexer=x")
+        assert resp.get_json() == {"deleted": 2}
+        assert self._count("indexer='y'") == 1
+
+    def test_clear_indexer_requires_name(self, client):
+        _insert_result(_insert_query(), guid="a")
+        assert delete_json(client, "/api/results").status_code == 400
+        assert self._count() == 1
+
+
 class TestUpdateQuery:
     def test_delete(self, client):
         qid = _insert_query(name="To Delete")

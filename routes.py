@@ -296,6 +296,40 @@ def delete_query(qid: int):
     return "", 204
 
 
+@bp.route("/queries/<int:qid>/results/<int:rid>", methods=["DELETE"])
+def delete_result(qid: int, rid: int):
+    """Forget one stored result so the next run treats it as new and notifies again."""
+    with _db_lock, get_db() as conn:
+        cur = conn.execute("DELETE FROM results WHERE id=? AND query_id=?", (rid, qid))
+        conn.commit()
+    if cur.rowcount == 0:
+        return problem(404, "Result not found")
+    return "", 204
+
+
+@bp.route("/queries/<int:qid>/results", methods=["DELETE"])
+def clear_query_results(qid: int):
+    """Forget every stored result of a query."""
+    with _db_lock, get_db() as conn:
+        if not conn.execute("SELECT id FROM queries WHERE id=?", (qid,)).fetchone():
+            return problem(404, "Query not found")
+        cur = conn.execute("DELETE FROM results WHERE query_id=?", (qid,))
+        conn.commit()
+    return jsonify({"deleted": cur.rowcount})
+
+
+@bp.route("/results", methods=["DELETE"])
+def clear_indexer_results():
+    """Forget every stored result from one indexer, across all queries."""
+    indexer = request.args.get("indexer", "")
+    if not indexer:
+        return problem(400, "Validation failed", errors={"indexer": ["Required"]})
+    with _db_lock, get_db() as conn:
+        cur = conn.execute("DELETE FROM results WHERE indexer=?", (indexer,))
+        conn.commit()
+    return jsonify({"deleted": cur.rowcount})
+
+
 @bp.route("/queries/<int:qid>/run", methods=["POST"])
 def run_query(qid: int):
     with get_db() as conn:

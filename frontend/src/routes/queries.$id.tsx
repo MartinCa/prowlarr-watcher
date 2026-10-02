@@ -11,11 +11,15 @@ import { Label } from "@/components/ui/label";
 import { IndexerChecklist } from "@/features/queries/components/IndexerChecklist";
 import { StoredResultsTable } from "@/features/queries/components/ResultsTable";
 import {
+  useClearIndexerResults,
+  useClearQueryResults,
   useDeleteQuery,
+  useDeleteResult,
   useQueryDetail,
   useRunQuery,
   useUpdateQuery,
 } from "@/features/queries/hooks";
+import type { Result } from "@/lib/types";
 import { useSettings } from "@/features/settings/hooks";
 import { ApiError } from "@/lib/api";
 import {
@@ -37,6 +41,9 @@ function QueryDetailPage() {
   const updateQuery = useUpdateQuery(qid);
   const deleteQuery = useDeleteQuery();
   const runQuery = useRunQuery();
+  const deleteResult = useDeleteResult(qid);
+  const clearResults = useClearQueryResults(qid);
+  const clearIndexer = useClearIndexerResults();
 
   const settingsRef = useRef<HTMLDetailsElement>(null);
 
@@ -64,6 +71,9 @@ function QueryDetailPage() {
   const override = overrideEnabled ?? query.excludedIndexers !== null;
   const excluded = excludedDraft ?? query.excludedIndexers ?? [];
   const note = noteInput ?? query.note ?? "";
+  const indexerNames = [
+    ...new Set(query.results.map((r) => r.indexer).filter((i): i is string => !!i)),
+  ].sort();
   const newCount = query.results.filter((r) => r.isNew).length;
 
   function handleDelete() {
@@ -82,6 +92,34 @@ function QueryDetailPage() {
           toast.error(error instanceof ApiError ? error.message : "Delete failed");
         }
       },
+    });
+  }
+
+  function onClearError(error: Error) {
+    toast.error(error instanceof ApiError ? error.message : "Clear failed");
+  }
+
+  function handleClearResult(result: Result) {
+    deleteResult.mutate(result.id, {
+      onSuccess: () => toast.success("Result cleared — it will notify again if seen"),
+      onError: onClearError,
+    });
+  }
+
+  function handleClearAll() {
+    if (!confirm("Clear all results of this query? They will all notify again on the next run."))
+      return;
+    clearResults.mutate(undefined, {
+      onSuccess: (data) => toast.success(`Cleared ${data.deleted} results`),
+      onError: onClearError,
+    });
+  }
+
+  function handleClearIndexer(indexer: string) {
+    if (!confirm(`Clear all results from "${indexer}" across ALL queries?`)) return;
+    clearIndexer.mutate(indexer, {
+      onSuccess: (data) => toast.success(`Cleared ${data.deleted} results from ${indexer}`),
+      onError: onClearError,
     });
   }
 
@@ -221,9 +259,34 @@ function QueryDetailPage() {
             {newCount} new
           </Badge>
         )}
+        <div className="ml-auto flex items-center gap-2">
+          {indexerNames.length > 0 && (
+            <select
+              aria-label="Clear all results from an indexer across all queries"
+              className="border-input bg-background h-8 rounded-md border px-2 text-xs"
+              value=""
+              onChange={(e) => e.target.value && handleClearIndexer(e.target.value)}
+            >
+              <option value="">Clear indexer (all queries)…</option>
+              {indexerNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={query.results.length === 0}
+            onClick={handleClearAll}
+          >
+            Clear all
+          </Button>
+        </div>
       </div>
       <div className="max-h-[70vh] overflow-auto rounded-md border">
-        <StoredResultsTable results={query.results} />
+        <StoredResultsTable results={query.results} onClear={handleClearResult} />
       </div>
 
       <details ref={settingsRef} className="group rounded-md border">

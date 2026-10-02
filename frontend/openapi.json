@@ -85,6 +85,59 @@
         }
       }
     },
+    "/queries/{id}/results": {
+      "parameters": [{ "$ref": "#/components/parameters/QueryId" }],
+      "delete": {
+        "operationId": "clearQueryResults",
+        "summary": "Forget all stored results of a query so they notify again",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/DeletedCount" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/queries/{id}/results/{resultId}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/QueryId" },
+        {
+          "name": "resultId",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "integer" }
+        }
+      ],
+      "delete": {
+        "operationId": "deleteResult",
+        "summary": "Forget one stored result so it notifies again",
+        "responses": {
+          "204": { "description": "No Content" },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/results": {
+      "delete": {
+        "operationId": "clearIndexerResults",
+        "summary": "Forget all stored results from one indexer across all queries",
+        "parameters": [
+          { "name": "indexer", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/DeletedCount" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/queries/{id}/run": {
       "parameters": [{ "$ref": "#/components/parameters/QueryId" }],
       "post": {
@@ -428,6 +481,11 @@
             "items": { "$ref": "#/components/schemas/PreviewResult" }
           }
         }
+      },
+      "DeletedCount": {
+        "type": "object",
+        "required": ["deleted"],
+        "properties": { "deleted": { "type": "integer" } }
       },
       "QueueStatus": {
         "type": "object",
