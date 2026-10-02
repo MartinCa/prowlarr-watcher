@@ -65,6 +65,10 @@ jobs:
         run: pnpm run format-check
         working-directory: frontend
 
+      - name: Lint OpenAPI spec
+        run: pnpm run lint:api
+        working-directory: frontend
+
       - name: Type check
         run: pnpm exec tsc --noEmit
         working-directory: frontend

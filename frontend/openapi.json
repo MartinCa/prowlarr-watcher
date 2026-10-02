@@ -3,9 +3,11 @@
   "info": {
     "title": "Prowlarr Watcher API",
     "version": "1.0.0",
+    "license": { "name": "MIT", "identifier": "MIT" },
     "description": "Hand-authored spec for the Flask JSON API — kept in sync with routes.py by hand (see DESIGN.md section 9). src/lib/api-types.ts is generated from this file via openapi-typescript and must never be hand-edited."
   },
   "servers": [{ "url": "/api" }],
+  "security": [],
   "paths": {
     "/queries": {
       "get": {
@@ -294,6 +296,7 @@
           }
         },
         "responses": {
+          "400": { "$ref": "#/components/responses/Problem" },
           "200": {
             "description": "OK",
             "content": {

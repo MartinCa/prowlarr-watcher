@@ -8,9 +8,10 @@
     "dev": "vite",
     "build": "vite build && tsc -b",
     "lint": "eslint . --max-warnings 0",
+    "lint:api": "redocly lint openapi.json",
     "format-check": "prettier --check .",
     "test": "vitest run",
-    "generate:api-types": "openapi-typescript openapi.json -o src/lib/api-types.ts && prettier --write --ignore-path .gitignore src/lib/api-types.ts",
+    "generate:api-types": "openapi-typescript openapi.json -o src/lib/api-types.ts && prettier --write src/lib/api-types.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@martinrun/frontend-config": "0.2.11",
+    "@redocly/cli": "2.57.0",
     "@tanstack/router-plugin": "1.168.41",
     "@types/node": "24.19.0",
     "@types/react": "19.3.0",
