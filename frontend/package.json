@@ -10,7 +10,7 @@
     "lint": "eslint . --max-warnings 0",
     "format-check": "prettier --check .",
     "test": "vitest run",
-    "generate:api-types": "openapi-typescript openapi.json -o src/lib/api-types.ts",
+    "generate:api-types": "openapi-typescript openapi.json -o src/lib/api-types.ts && prettier --write --ignore-path .gitignore src/lib/api-types.ts",
     "preview": "vite preview"
   },
   "dependencies": {
