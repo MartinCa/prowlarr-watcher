@@ -1,9 +1,0 @@
-extends:
-  - recommended
-
-rules:
-  # The API has no authentication by design (trusted network / reverse-proxy auth); the spec
-  # declares that explicitly with a root `security: []`.
-  # Read-only and test endpoints always answer 200 (failures are reported in the body), so
-  # demanding a 4XX response on every operation would document errors that never happen.
-  operation-4xx-response: off
