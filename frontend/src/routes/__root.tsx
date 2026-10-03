@@ -1,5 +1,5 @@
 import { Link, Outlet, createRootRoute } from "@tanstack/react-router";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/toast";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Route = createRootRoute({ component: RootLayout });
@@ -32,7 +32,7 @@ function RootLayout() {
       <main className="mx-auto max-w-4xl px-6 py-8">
         <Outlet />
       </main>
-      <Toaster richColors position="bottom-right" />
+      <Toaster />
     </div>
   );
 }

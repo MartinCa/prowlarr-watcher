@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "sonner";
+import { notifications } from "@/lib/notifications";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -51,7 +51,9 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
     searchPreview.mutate(queryText.trim(), {
       onSuccess: (data) => setJobId(data.jobId),
       onError: (error) => {
-        toast.error(error instanceof ApiError ? error.message : "Failed to start preview search");
+        notifications.error(
+          error instanceof ApiError ? error.message : "Failed to start preview search",
+        );
       },
     });
   }
@@ -72,7 +74,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
           reset();
         },
         onError: (error) => {
-          toast.error(error instanceof ApiError ? error.message : "Failed to create query");
+          notifications.error(error instanceof ApiError ? error.message : "Failed to create query");
         },
       },
     );

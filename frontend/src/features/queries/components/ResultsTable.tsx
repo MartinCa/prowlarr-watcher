@@ -1,6 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { EllipsisIcon, HardDriveDownloadIcon } from "lucide-react";
+import { ActionButton } from "@/components/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -9,8 +17,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { deriveGrabStatus } from "@/features/queries/grab-status";
 import { useGrabResult, useJob } from "@/features/queries/hooks";
 import { formatRelativeTime, formatSize, sanitizeUrl } from "@/lib/format";
+import { notifications } from "@/lib/notifications";
 import type { PreviewResult, Result } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -84,77 +94,108 @@ export function ResultsTable({ results }: { results: PreviewResult[] }) {
 
 /**
  * Sends a result to the download client through Prowlarr. The server refreshes the release
- * from the indexer first, so this is a queued job: poll it and show Prowlarr's / the client's
- * answer next to the button.
+ * from the indexer first, so this is a queued job: poll it. The icon tints green or red until
+ * the next click (or until the row unmounts); the answer from Prowlarr / the client goes in a toast.
  */
 function GrabButton({ qid, result }: { qid: number; result: Result }) {
-  const safeDownloadUrl = sanitizeUrl(result.downloadUrl);
   const grab = useGrabResult(qid);
   const [jobId, setJobId] = useState<string>();
   const job = useJob(jobId);
+  const notifiedJobId = useRef<string>(undefined);
 
-  const status = job.data?.status;
-  const inFlight =
-    grab.isPending ||
-    (!!jobId && !job.isError && (!status || ["queued", "running", "retrying"].includes(status)));
+  const jobStatus = job.data?.status;
+  const jobFailed = job.isError || jobStatus === "error";
+  const status = deriveGrabStatus({
+    requestPending: grab.isPending,
+    requestFailed: grab.isError,
+    jobId,
+    jobStatus,
+    pollFailed: job.isError,
+  });
 
-  let outcome: { ok: boolean; text: string } | undefined;
-  if (grab.isError) {
-    outcome = { ok: false, text: grab.error.message };
-  } else if (job.isError) {
-    outcome = { ok: false, text: job.error.message };
-  } else if (status === "done") {
-    outcome = { ok: true, text: job.data?.message ?? "Sent to the download client" };
-  } else if (status === "error") {
-    outcome = { ok: false, text: job.data?.error ?? "Grab failed" };
-  }
+  const failureText = grab.isError
+    ? grab.error.message
+    : job.isError
+      ? job.error.message
+      : (job.data?.error ?? "Grab failed");
+  const successText = job.data?.message ?? "Sent to the download client";
+
+  // One toast per finished job: the poll keeps returning the same terminal state, and a
+  // refetch must not announce it again.
+  useEffect(() => {
+    if (!jobId || notifiedJobId.current === jobId) return;
+    if (jobStatus === "done") {
+      notifiedJobId.current = jobId;
+      notifications.success(successText, { description: result.title ?? undefined });
+    } else if (jobFailed) {
+      notifiedJobId.current = jobId;
+      notifications.error("Grab failed", {
+        description: [result.title, failureText].filter(Boolean).join(" — "),
+      });
+    }
+  }, [jobId, jobStatus, jobFailed, successText, failureText, result.title]);
 
   function handleGrab() {
     setJobId(undefined);
     grab.mutate(result.id, {
       onSuccess: (data) => setJobId(data.jobId),
+      onError: (error) =>
+        notifications.error("Grab failed", {
+          description: [result.title, error.message].filter(Boolean).join(" — "),
+        }),
     });
   }
 
   return (
-    <div className="flex min-w-24 flex-col items-start gap-1">
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={inFlight || !result.guid}
-        title={
-          result.guid
-            ? "Send to the download client via Prowlarr"
-            : "This result has no GUID to grab it by"
-        }
-        onClick={handleGrab}
+    <ActionButton
+      icon={HardDriveDownloadIcon}
+      label={
+        result.guid
+          ? "Send to the download client via Prowlarr"
+          : "This result has no GUID to grab it by"
+      }
+      status={status}
+      resultLabel={status === "success" ? successText : failureText}
+      disabled={!result.guid}
+      onClick={handleGrab}
+    />
+  );
+}
+
+/** Rarely-used row actions, kept out of the way so the Grab column stays one icon wide. */
+function RowActions({ result, onClear }: { result: Result; onClear: (result: Result) => void }) {
+  const safeDownloadUrl = sanitizeUrl(result.downloadUrl);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={<Button variant="ghost" size="icon-sm" aria-label="More actions" />}
       >
-        {inFlight ? "Grabbing…" : "Grab"}
-      </Button>
-      {safeDownloadUrl && (
-        <a
-          href={safeDownloadUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-muted-foreground text-xs hover:underline"
-          title="Download the release directly"
+        <EllipsisIcon aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-auto">
+        {safeDownloadUrl && (
+          <DropdownMenuItem
+            render={
+              <a
+                href={safeDownloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Download the release directly"
+              />
+            }
+          >
+            Download
+          </DropdownMenuItem>
+        )}
+        {/* No confirm: clearing one row is cheap and undone by the next run re-finding it. */}
+        <DropdownMenuItem
+          title="Clear this result so it is notified about again"
+          onClick={() => onClear(result)}
         >
-          ↓ Download
-        </a>
-      )}
-      {outcome && (
-        <span
-          role="status"
-          className={cn(
-            "max-w-48 text-xs break-words whitespace-normal",
-            outcome.ok ? "text-status-ok" : "text-status-error",
-          )}
-        >
-          {outcome.ok ? "✓ " : "✗ "}
-          {outcome.text}
-        </span>
-      )}
-    </div>
+          Clear
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -252,15 +293,7 @@ export function StoredResultsTable({
                 {formatRelativeTime(r.firstSeen)}
               </TableCell>
               <TableCell>
-                {/* No confirm: clearing one row is cheap and undone by the next run re-finding it. */}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  title="Clear this result so it is notified about again"
-                  onClick={() => onClear(r)}
-                >
-                  Clear
-                </Button>
+                <RowActions result={r} onClear={onClear} />
               </TableCell>
             </TableRow>
           );

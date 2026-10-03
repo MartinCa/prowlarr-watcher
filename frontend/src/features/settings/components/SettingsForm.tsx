@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "sonner";
+import { notifications } from "@/lib/notifications";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { IndexerChecklist } from "@/features/queries/components/IndexerChecklist";
@@ -24,9 +24,9 @@ export function SettingsForm({ settings }: { settings: Settings }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     saveSettings.mutate(form, {
-      onSuccess: () => toast.success("Settings saved"),
+      onSuccess: () => notifications.success("Settings saved"),
       onError: (error) =>
-        toast.error(error instanceof ApiError ? error.message : "Failed to save settings"),
+        notifications.error(error instanceof ApiError ? error.message : "Failed to save settings"),
     });
   }
 

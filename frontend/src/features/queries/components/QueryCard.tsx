@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { CirclePlay, Pause, Play, StickyNote, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
+import { notifications } from "@/lib/notifications";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MediaTypeIcons } from "@/features/queries/components/MediaTypeBadges";
@@ -28,7 +28,8 @@ export function QueryCard({
   function handleDelete() {
     if (!confirm("Delete this query and all its results?")) return;
     deleteQuery.mutate(query.id, {
-      onError: (error) => toast.error(error instanceof ApiError ? error.message : "Delete failed"),
+      onError: (error) =>
+        notifications.error(error instanceof ApiError ? error.message : "Delete failed"),
     });
   }
 

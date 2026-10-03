@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "sonner";
+import { notifications } from "@/lib/notifications";
 import { Button } from "@/components/ui/button";
 import { useClearIndexerResults, useResultIndexers } from "@/features/queries/hooks";
 import { ApiError } from "@/lib/api";
@@ -23,10 +23,11 @@ export function ClearIndexerResults() {
       return;
     clear.mutate(current.name, {
       onSuccess: (data) => {
-        toast.success(`Cleared ${data.deleted} results from ${current.name}`);
+        notifications.success(`Cleared ${data.deleted} results from ${current.name}`);
         setSelected("");
       },
-      onError: (error) => toast.error(error instanceof ApiError ? error.message : "Clear failed"),
+      onError: (error) =>
+        notifications.error(error instanceof ApiError ? error.message : "Clear failed"),
     });
   }
 
