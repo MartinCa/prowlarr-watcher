@@ -2435,6 +2435,19 @@ class TestGrabRelease:
         with pytest.raises(prowlarr.GrabError, match="Client refused: no space"):
             prowlarr.grab_release("dune", "g1", "IdxA")
 
+    @patch("prowlarr.requests.post")
+    @patch("prowlarr.prowlarr_search_raw")
+    @patch("prowlarr.list_indexers")
+    def test_qbittorrent_connect_error_hints_at_duplicate(self, mock_idx, mock_search, mock_post):
+        _configure_prowlarr()
+        mock_idx.return_value = [{"id": 7, "name": "IdxA", "enable": True}]
+        mock_search.return_value = [{"guid": "g1", "indexer": "IdxA", "indexerId": 7}]
+        mock_post.return_value = self._response(
+            500, {"message": "Failed to connect to qBittorrent, check your settings."}
+        )
+        with pytest.raises(prowlarr.GrabError, match="already in qBittorrent"):
+            prowlarr.grab_release("dune", "g1", "IdxA")
+
     def test_get_job_returns_grab_message(self, client):
         job = worker.Job(job_id="gj", status="done", result="Sent")
         with patch.object(worker.work_queue, "get_job", return_value=job):
