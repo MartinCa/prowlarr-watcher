@@ -525,6 +525,7 @@ def test_apprise():
     ap = apprise.Apprise()
     for u in urls:
         ap.add(u)
-    ok = ap.notify(title="Prowlarr Watcher — test", body="Notification delivery confirmed ✓")
+    # apprise v2 returns an AppriseResult; bool() keeps it JSON-serializable
+    ok = bool(ap.notify(title="Prowlarr Watcher — test", body="Notification delivery confirmed ✓"))
     msg = "Sent!" if ok else "Delivery may have failed — check your URLs"
     return jsonify({"ok": ok, "message": msg})

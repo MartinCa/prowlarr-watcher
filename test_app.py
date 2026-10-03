@@ -1738,6 +1738,16 @@ class TestTestProwlarr:
         assert "Unexpected error" in data["message"]
 
 
+class FakeAppriseResult:
+    """Mimics apprise v2's AppriseResult: truthy/falsy but not JSON-serializable."""
+
+    def __init__(self, ok):
+        self._ok = ok
+
+    def __bool__(self):
+        return self._ok
+
+
 class TestTestApprise:
     @patch("routes.apprise.Apprise")
     def test_no_urls(self, mock_cls, client):
@@ -1748,7 +1758,7 @@ class TestTestApprise:
     @patch("routes.apprise.Apprise")
     def test_success(self, mock_cls, client):
         mock_ap = MagicMock()
-        mock_ap.notify.return_value = True
+        mock_ap.notify.return_value = FakeAppriseResult(True)
         mock_cls.return_value = mock_ap
 
         resp = post_json(client, "/api/settings/test-apprise", {"appriseUrls": "json://localhost"})
@@ -1759,7 +1769,7 @@ class TestTestApprise:
     @patch("routes.apprise.Apprise")
     def test_delivery_failure_reported(self, mock_cls, client):
         mock_ap = MagicMock()
-        mock_ap.notify.return_value = False
+        mock_ap.notify.return_value = FakeAppriseResult(False)
         mock_cls.return_value = mock_ap
 
         resp = post_json(client, "/api/settings/test-apprise", {"appriseUrls": "json://localhost"})
