@@ -150,7 +150,12 @@ def grab_release(query: str, guid: str, indexer_name: str | None) -> str:
     except requests.exceptions.RequestException as exc:
         raise GrabError(f"Could not reach Prowlarr: {exc}") from exc
     if not resp.ok:
-        raise GrabError(_prowlarr_error_message(resp))
+        message = _prowlarr_error_message(resp)
+        if "failed to connect to qbittorrent" in message.lower():
+            # qBittorrent answers "Fails." for a torrent it already has, and Prowlarr reports
+            # that as a connection failure, so the real cause is ambiguous.
+            message += " (This also appears when the torrent is already in qBittorrent.)"
+        raise GrabError(message)
     return "Sent to the download client via Prowlarr"
 
 
