@@ -37,6 +37,18 @@ describe("deriveGrabStatus", () => {
     expect(deriveGrabStatus({ ...idle, jobId: "j1", jobStatus: "error" })).toBe("error");
   });
 
+  it("stays success when a later refetch of a finished job fails", () => {
+    expect(deriveGrabStatus({ ...idle, jobId: "j1", jobStatus: "done", pollFailed: true })).toBe(
+      "success",
+    );
+  });
+
+  it("stays error when a failed job's refetch also fails", () => {
+    expect(deriveGrabStatus({ ...idle, jobId: "j1", jobStatus: "error", pollFailed: true })).toBe(
+      "error",
+    );
+  });
+
   it("is error when the request itself was rejected", () => {
     expect(deriveGrabStatus({ ...idle, requestFailed: true })).toBe("error");
   });
