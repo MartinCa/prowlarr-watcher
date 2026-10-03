@@ -1225,6 +1225,40 @@ class TestNotify:
         assert body.startswith("Only remastered releases\n")
 
     @patch("notifications.apprise.Apprise")
+    def test_media_flags_are_at_very_top(self, mock_apprise_cls):
+        db.set_setting("apprise_urls", "json://localhost/test")
+        mock_ap = MagicMock()
+        mock_apprise_cls.return_value = mock_ap
+
+        notifications.notify_new_results(
+            "Q", "q", SAMPLE_RESULTS, "Only remastered releases", audiobook=True, ebook=True
+        )
+        body = mock_ap.notify.call_args.kwargs["body"]
+        assert body.startswith("🎧 Audiobook · 📖 Ebook\n\nOnly remastered releases\n")
+
+        notifications.notify_new_results("Q", "q", SAMPLE_RESULTS, None, ebook=True)
+        body = mock_ap.notify.call_args.kwargs["body"]
+        assert body.startswith("📖 Ebook\n")
+        assert "Audiobook" not in body
+
+        notifications.notify_new_results("Q", "q", SAMPLE_RESULTS)
+        body = mock_ap.notify.call_args.kwargs["body"]
+        assert "Audiobook" not in body and "Ebook" not in body
+
+    @patch("callbacks.notify_new_results")
+    def test_notifies_with_media_flags(self, mock_notify):
+        qid = _insert_query()
+        with db.get_db() as conn:
+            conn.execute("UPDATE queries SET audiobook=1, ebook=0 WHERE id=?", (qid,))
+            conn.commit()
+        job = worker.Job(status="done", result=SAMPLE_RESULTS)
+        callbacks.process_query_result(qid, "0 * * * *", job)
+
+        call_args = mock_notify.call_args[0]
+        assert call_args[4] is True
+        assert call_args[5] is False
+
+    @patch("notifications.apprise.Apprise")
     def test_truncates_at_20(self, mock_apprise_cls):
         db.set_setting("apprise_urls", "json://localhost/test")
         mock_ap = MagicMock()
