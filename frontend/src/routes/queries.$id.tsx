@@ -132,9 +132,9 @@ function QueryDetailPage() {
     );
   }
 
-  function saveNote(value: string | undefined = noteInput) {
+  function saveNote() {
     updateQuery.mutate(
-      { note: value?.trim() || null },
+      { note: noteInput?.trim() || null },
       {
         onSuccess: () => toast.success("Note saved"),
         onError: () => toast.error("Failed to save note"),
@@ -203,6 +203,7 @@ function QueryDetailPage() {
         <Field label="Requested">
           <MediaTypeToggles
             value={query}
+            disabled={updateQuery.isPending}
             onChange={(key, next) =>
               updateQuery.mutate(
                 { [key]: next },
@@ -291,29 +292,13 @@ function QueryDetailPage() {
                 placeholder="e.g. Only the remastered release"
                 onChange={(e) => setNoteInput(e.target.value)}
               />
-              <Button size="sm" variant="outline" onClick={() => saveNote()}>
+              <Button size="sm" variant="outline" onClick={saveNote}>
                 Save
               </Button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {["Audiobook", "Ebook"].map((label) => (
-                <Button
-                  key={label}
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    const trimmed = note.trim();
-                    const next = trimmed ? `${trimmed}, ${label}` : label;
-                    setNoteInput(next);
-                    saveNote(next);
-                  }}
-                >
-                  + {label}
-                </Button>
-              ))}
-            </div>
             <p className="text-muted-foreground text-xs">
-              Shown as the first line of new-result notifications for this query.
+              Shown near the top of new-result notifications for this query, under the requested
+              media types.
             </p>
           </Card>
 

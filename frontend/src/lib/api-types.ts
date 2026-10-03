@@ -279,7 +279,7 @@ export interface components {
       lastNewResult: string | null;
       /** @description null means: inherit the default exclusion list from Settings */
       excludedIndexers: number[] | null;
-      /** @description Optional note shown as the first line of new-result notifications */
+      /** @description Optional note shown at the top of new-result notifications, below the requested media types */
       note: string | null;
       /** @description An audiobook release is requested */
       audiobook: boolean;

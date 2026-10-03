@@ -417,7 +417,7 @@
             "items": { "type": "integer" }
           },
           "note": {
-            "description": "Optional note shown as the first line of new-result notifications",
+            "description": "Optional note shown at the top of new-result notifications, below the requested media types",
             "type": ["string", "null"]
           },
           "audiobook": { "description": "An audiobook release is requested", "type": "boolean" },

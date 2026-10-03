@@ -186,8 +186,12 @@ def create_query():
     name = str(body.get("name") or "").strip() or query_text
     cron = str(body.get("cron") or "").strip() or None
     note = str(body.get("note") or "").strip() or None
-    audiobook = bool(body.get("audiobook", True))
-    ebook = bool(body.get("ebook", True))
+    flags = {}
+    for field in ("audiobook", "ebook"):
+        flags[field] = body.get(field, True)
+        if not isinstance(flags[field], bool):
+            return problem(400, "Validation failed", errors={field: ["Must be a boolean"]})
+    audiobook, ebook = flags["audiobook"], flags["ebook"]
 
     now_iso = datetime.now(timezone.utc).isoformat()
     cron_expr = cron or get_setting("default_cron", "0 * * * *")

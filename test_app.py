@@ -1658,6 +1658,12 @@ class TestUpdateQuery:
         assert data["audiobook"] is False
         assert data["ebook"] is True
 
+    def test_create_rejects_non_boolean_media_flag(self, client):
+        for value in ("false", None):
+            resp = post_json(client, "/api/queries", {"query": "dune", "ebook": value})
+            assert resp.status_code == 400
+            assert "ebook" in resp.get_json()["errors"]
+
     def test_update_nonexistent(self, client):
         resp = patch_json(client, "/api/queries/9999", {"enabled": False})
         assert resp.status_code == 404

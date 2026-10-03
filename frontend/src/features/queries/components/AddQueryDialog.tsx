@@ -145,7 +145,8 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
               placeholder="e.g. Only the remastered release"
             />
             <p className="text-muted-foreground text-xs">
-              Shown as the first line of new-result notifications for this query.
+              Shown near the top of new-result notifications for this query, under the requested
+              media types.
             </p>
           </div>
 
