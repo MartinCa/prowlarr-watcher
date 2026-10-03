@@ -39,7 +39,7 @@ export interface paths {
     delete: operations["deleteQuery"];
     options?: never;
     head?: never;
-    /** Partially update a query (enabled, cron, note, or excludedIndexers) */
+    /** Partially update a query (enabled, cron, note, audiobook, ebook, or excludedIndexers) */
     patch: operations["updateQuery"];
     trace?: never;
   };
@@ -279,8 +279,12 @@ export interface components {
       lastNewResult: string | null;
       /** @description null means: inherit the default exclusion list from Settings */
       excludedIndexers: number[] | null;
-      /** @description Optional note shown as the first line of new-result notifications */
+      /** @description Optional note shown at the top of new-result notifications, below the requested media types */
       note: string | null;
+      /** @description An audiobook release is requested */
+      audiobook: boolean;
+      /** @description An ebook release is requested */
+      ebook: boolean;
     };
     QueryDetail: components["schemas"]["Query"] & {
       results: components["schemas"]["Result"][];
@@ -313,12 +317,18 @@ export interface components {
       name?: string;
       cron?: string;
       note?: string;
+      /** @default true */
+      audiobook: boolean;
+      /** @default true */
+      ebook: boolean;
     };
     UpdateQueryRequest: {
       enabled?: boolean;
       cron?: string | null;
       excludedIndexers?: number[] | null;
       note?: string | null;
+      audiobook?: boolean;
+      ebook?: boolean;
     };
     Job: {
       /** @enum {string} */

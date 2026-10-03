@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MediaTypeToggles } from "@/features/queries/components/MediaTypeBadges";
 import { ResultsTable } from "@/features/queries/components/ResultsTable";
 import { useCreateQuery, useJob, useSearchPreview } from "@/features/queries/hooks";
 import { cronGuruUrl, describeCron } from "@/lib/format";
@@ -22,6 +23,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
   const [name, setName] = useState("");
   const [cron, setCron] = useState("");
   const [note, setNote] = useState("");
+  const [media, setMedia] = useState({ audiobook: true, ebook: true });
   const [jobId, setJobId] = useState<string>();
 
   const searchPreview = useSearchPreview();
@@ -40,6 +42,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
     setName("");
     setCron("");
     setNote("");
+    setMedia({ audiobook: true, ebook: true });
     setJobId(undefined);
   }
 
@@ -61,6 +64,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
         name: name.trim() || undefined,
         cron: cron.trim() || undefined,
         note: note.trim() || undefined,
+        ...media,
       },
       {
         onSuccess: () => {
@@ -125,6 +129,14 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
           </div>
 
           <div className="flex flex-col gap-2">
+            <Label>Requested</Label>
+            <MediaTypeToggles
+              value={media}
+              onChange={(key, next) => setMedia({ ...media, [key]: next })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
             <Label htmlFor="query-note">Note (optional)</Label>
             <Input
               id="query-note"
@@ -133,7 +145,8 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
               placeholder="e.g. Only the remastered release"
             />
             <p className="text-muted-foreground text-xs">
-              Shown as the first line of new-result notifications for this query.
+              Shown near the top of new-result notifications for this query, under the requested
+              media types.
             </p>
           </div>
 

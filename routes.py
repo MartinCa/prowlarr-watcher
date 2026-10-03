@@ -112,6 +112,8 @@ def _serialize_query(row: sqlite3.Row) -> dict:
         "lastNewResult": row["last_new_result"],
         "excludedIndexers": None if excluded is None else parse_indexer_ids(excluded),
         "note": row["note"],
+        "audiobook": bool(row["audiobook"]),
+        "ebook": bool(row["ebook"]),
     }
 
 
@@ -184,6 +186,12 @@ def create_query():
     name = str(body.get("name") or "").strip() or query_text
     cron = str(body.get("cron") or "").strip() or None
     note = str(body.get("note") or "").strip() or None
+    flags = {}
+    for field in ("audiobook", "ebook"):
+        flags[field] = body.get(field, True)
+        if not isinstance(flags[field], bool):
+            return problem(400, "Validation failed", errors={field: ["Must be a boolean"]})
+    audiobook, ebook = flags["audiobook"], flags["ebook"]
 
     now_iso = datetime.now(timezone.utc).isoformat()
     cron_expr = cron or get_setting("default_cron", "0 * * * *")
@@ -193,9 +201,9 @@ def create_query():
 
     with _db_lock, get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO queries (name, query, cron, created_at, next_run, note)"
-            " VALUES (?,?,?,?,?,?)",
-            (name, query_text, cron, now_iso, next_iso, note),
+            "INSERT INTO queries (name, query, cron, created_at, next_run, note, audiobook, ebook)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            (name, query_text, cron, now_iso, next_iso, note, int(audiobook), int(ebook)),
         )
         qid = cur.lastrowid
         conn.commit()
@@ -257,6 +265,15 @@ def update_query(qid: int):
         with _db_lock, get_db() as conn:
             conn.execute("UPDATE queries SET note=? WHERE id=?", (note, qid))
             conn.commit()
+
+    for field in ("audiobook", "ebook"):
+        if field in body:
+            if not isinstance(body[field], bool):
+                return problem(400, "Validation failed", errors={field: ["Must be a boolean"]})
+            with _db_lock, get_db() as conn:
+                # field is one of two fixed names, never user input
+                conn.execute(f"UPDATE queries SET {field}=? WHERE id=?", (int(body[field]), qid))
+                conn.commit()
 
     if "excludedIndexers" in body:
         excluded = body["excludedIndexers"]
