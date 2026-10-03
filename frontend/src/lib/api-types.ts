@@ -116,6 +116,62 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/queries/mark-seen": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Clear the new-result indication on every query */
+    post: operations["markAllSeen"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/queries/{id}/mark-seen": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Clear the new-result indication on one query */
+    post: operations["markQuerySeen"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/queries/{id}/results/{resultId}/grab": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+        resultId: number;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Send a stored result to the download client via Prowlarr, refreshing the release from the indexer first. Poll the returned job: done carries message, error carries the Prowlarr/client error */
+    post: operations["grabResult"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/queries/{id}/run": {
     parameters: {
       query?: never;
@@ -277,6 +333,8 @@ export interface components {
       lastError: string | null;
       /** Format: date-time */
       lastNewResult: string | null;
+      /** @description Number of results still flagged as new (not yet viewed) */
+      newCount: number;
       /** @description null means: inherit the default exclusion list from Settings */
       excludedIndexers: number[] | null;
       /** @description Optional note shown at the top of new-result notifications, below the requested media types */
@@ -334,11 +392,16 @@ export interface components {
       /** @enum {string} */
       status: "queued" | "running" | "retrying" | "done" | "error";
       error?: string;
+      /** @description Success message of a grab job */
+      message?: string;
       results?: components["schemas"]["PreviewResult"][];
     };
     ResultIndexer: {
       name: string;
       count: number;
+    };
+    ClearedCount: {
+      cleared: number;
     };
     DeletedCount: {
       deleted: number;
@@ -605,6 +668,76 @@ export interface operations {
         };
       };
       400: components["responses"]["Problem"];
+    };
+  };
+  markAllSeen: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ClearedCount"];
+        };
+      };
+    };
+  };
+  markQuerySeen: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ClearedCount"];
+        };
+      };
+      404: components["responses"]["Problem"];
+    };
+  };
+  grabResult: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["QueryId"];
+        resultId: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            jobId: string;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
     };
   };
   runQuery: {

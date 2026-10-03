@@ -8,9 +8,10 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import IntEnum
+from typing import Any
 
 from db import get_setting
-from prowlarr import prowlarr_search_raw
+from prowlarr import GrabError, prowlarr_search_raw
 
 log = logging.getLogger("prowlarr-watcher")
 
@@ -29,8 +30,10 @@ class Job:
     label: str = "unknown"
     priority: Priority = Priority.LOW
     callback: Callable[["Job"], None] | None = None
+    # When set, run instead of a plain search; its return value becomes `result`.
+    runner: Callable[[], Any] | None = None
     status: str = "queued"  # queued -> running -> done | error
-    result: list[dict] | None = None
+    result: Any = None
     error: str | None = None
     attempt: int = 1
     created_at: float = field(default_factory=time.monotonic)
@@ -79,6 +82,7 @@ class WorkQueue:
         priority: Priority = Priority.LOW,
         callback: Callable[[Job], None] | None = None,
         attempt: int = 1,
+        runner: Callable[[], Any] | None = None,
     ) -> Job:
         with self._lock:
             if label in self._active_labels:
@@ -94,6 +98,7 @@ class WorkQueue:
                 label=label,
                 priority=priority,
                 callback=callback,
+                runner=runner,
                 attempt=attempt,
                 _seq=self._seq,
             )
@@ -129,12 +134,19 @@ class WorkQueue:
                 time.sleep(wait)
 
             try:
-                job.result = prowlarr_search_raw(job.query, job.categories, job.excluded_indexers)
+                if job.runner:
+                    job.result = job.runner()
+                else:
+                    job.result = prowlarr_search_raw(
+                        job.query, job.categories, job.excluded_indexers
+                    )
                 job.status = "done"
             except Exception as exc:
-                job.error = f"{type(exc).__name__}: {exc}"
-                is_preview = job.label.startswith("preview:")
-                max_ret = 1 if is_preview else self._max_retries()
+                job.error = (
+                    str(exc) if isinstance(exc, GrabError) else f"{type(exc).__name__}: {exc}"
+                )
+                single_attempt = job.label.startswith(("preview:", "grab:"))
+                max_ret = 1 if single_attempt else self._max_retries()
                 if job.attempt < max_ret:
                     log.warning(
                         "Search failed for %r (attempt %d/%d), retrying",
@@ -167,6 +179,7 @@ class WorkQueue:
                     label=job.label,
                     priority=job.priority,
                     callback=job.callback,
+                    runner=job.runner,
                     attempt=job.attempt + 1,
                 )
                 self._pq.task_done()

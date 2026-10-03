@@ -65,6 +65,7 @@ def prowlarr_search_raw(
     query: str,
     categories: list[int] | None = None,
     excluded_indexer_ids: list[int] | None = None,
+    indexer_ids: list[int] | None = None,
 ) -> list[dict]:
     base = get_setting("prowlarr_url").rstrip("/")
     api_key = get_setting("prowlarr_api_key")
@@ -74,7 +75,9 @@ def prowlarr_search_raw(
     params: dict = {"query": query}
     if categories:
         params["categories"] = categories
-    if excluded_indexer_ids:
+    if indexer_ids:
+        params["indexerIds"] = indexer_ids
+    elif excluded_indexer_ids:
         excluded = set(excluded_indexer_ids)
         params["indexerIds"] = [i["id"] for i in list_indexers() if i["id"] not in excluded]
 
@@ -89,6 +92,64 @@ def prowlarr_search_raw(
     results = resp.json()
     log.info("Search %r → %d results", query, len(results))
     return results
+
+
+class GrabError(Exception):
+    """A failed grab, with a message fit to show the user as-is."""
+
+
+def _prowlarr_error_message(resp: requests.Response) -> str:
+    """Best human-readable message from a failed Prowlarr response."""
+    try:
+        data = resp.json()
+    except ValueError:
+        data = None
+    if isinstance(data, list) and data:
+        data = data[0]  # validation failures come back as a list of {errorMessage, ...}
+    if isinstance(data, dict):
+        for key in ("message", "errorMessage", "detail", "title"):
+            if data.get(key):
+                return str(data[key])
+    return resp.text.strip()[:300] or f"HTTP {resp.status_code}"
+
+
+def grab_release(query: str, guid: str, indexer_name: str | None) -> str:
+    """Send a release to the download client via Prowlarr, as Prowlarr's own UI does.
+
+    Prowlarr only grabs releases still in its short-lived search cache (that is also where
+    the indexer's fresh download token/link comes from), so the query is searched again first
+    and the release is picked from the fresh results.
+    """
+    base = get_setting("prowlarr_url").rstrip("/")
+    api_key = get_setting("prowlarr_api_key")
+    if not base or not api_key:
+        raise GrabError("Prowlarr URL and API key must be configured in Settings")
+
+    indexer_ids = [i["id"] for i in list_indexers() if i["name"] == indexer_name]
+    try:
+        fresh = prowlarr_search_raw(query, indexer_ids=indexer_ids or None)
+    except requests.exceptions.RequestException as exc:
+        raise GrabError(f"Could not refresh the release from Prowlarr: {exc}") from exc
+
+    match = next(
+        (r for r in fresh if r.get("guid") == guid and r.get("indexer") == indexer_name), None
+    )
+    if not match or match.get("indexerId") is None:
+        raise GrabError("The indexer no longer returns this release — it may have been removed")
+
+    timeout = int(get_setting("prowlarr_timeout", "200"))
+    try:
+        resp = requests.post(
+            f"{base}/api/v1/search",
+            headers={"X-Api-Key": api_key},
+            json={"guid": guid, "indexerId": match["indexerId"]},
+            timeout=timeout,
+        )
+    except requests.exceptions.RequestException as exc:
+        raise GrabError(f"Could not reach Prowlarr: {exc}") from exc
+    if not resp.ok:
+        raise GrabError(_prowlarr_error_message(resp))
+    return "Sent to the download client via Prowlarr"
 
 
 def hash_result(r: dict) -> str:

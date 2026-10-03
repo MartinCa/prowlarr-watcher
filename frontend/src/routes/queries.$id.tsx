@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Pencil } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   useClearQueryResults,
   useDeleteQuery,
   useDeleteResult,
+  useMarkQuerySeen,
   useQueryDetail,
   useRunQuery,
   useUpdateQuery,
@@ -43,6 +44,16 @@ function QueryDetailPage() {
   const runQuery = useRunQuery();
   const deleteResult = useDeleteResult(qid);
   const clearResults = useClearQueryResults(qid);
+
+  const markSeen = useMarkQuerySeen(qid);
+  const hasNew = detail.data?.results.some((r) => r.isNew) ?? false;
+  const { mutate: markSeenMutate } = markSeen;
+
+  // Viewing the query clears its new indication; this page keeps showing the highlights
+  // it loaded (the mutation deliberately does not refetch the detail).
+  useEffect(() => {
+    if (hasNew) markSeenMutate();
+  }, [hasNew, qid, markSeenMutate]);
 
   const settingsRef = useRef<HTMLDetailsElement>(null);
 
@@ -271,7 +282,7 @@ function QueryDetailPage() {
         </div>
       </div>
       <div className="max-h-[70vh] overflow-auto rounded-md border">
-        <StoredResultsTable results={query.results} onClear={handleClearResult} />
+        <StoredResultsTable qid={qid} results={query.results} onClear={handleClearResult} />
       </div>
 
       <details ref={settingsRef} className="group rounded-md border">

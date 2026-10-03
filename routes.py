@@ -15,6 +15,7 @@ from db import _db_lock, get_db, get_setting, set_setting
 from prowlarr import (
     effective_excluded_indexers,
     format_indexer_ids,
+    grab_release,
     list_indexers,
     parse_indexer_ids,
     sanitize_url,
@@ -96,6 +97,12 @@ def _compute_next_or_400(cron_expr: str, field: str = "cron"):
 # ---------------------------------------------------------------------------
 # Serialization — DB rows / Prowlarr results -> camelCase JSON
 # ---------------------------------------------------------------------------
+_QUERY_SELECT = (
+    "SELECT q.*, (SELECT COUNT(*) FROM results r WHERE r.query_id=q.id AND r.is_new=1)"
+    " AS new_count FROM queries q"
+)
+
+
 def _serialize_query(row: sqlite3.Row) -> dict:
     excluded = row["excluded_indexers"]
     return {
@@ -110,6 +117,7 @@ def _serialize_query(row: sqlite3.Row) -> dict:
         "lastCount": row["last_count"],
         "lastError": row["last_error"],
         "lastNewResult": row["last_new_result"],
+        "newCount": row["new_count"],
         "excludedIndexers": None if excluded is None else parse_indexer_ids(excluded),
         "note": row["note"],
         "audiobook": bool(row["audiobook"]),
@@ -172,7 +180,7 @@ def _serialize_settings() -> dict:
 def list_queries():
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT * FROM queries ORDER BY last_new_result IS NULL, last_new_result DESC, id DESC"
+            f"{_QUERY_SELECT} ORDER BY q.last_new_result IS NULL, q.last_new_result DESC, q.id DESC"
         ).fetchall()
     return jsonify([_serialize_query(r) for r in rows])
 
@@ -207,7 +215,7 @@ def create_query():
         )
         qid = cur.lastrowid
         conn.commit()
-        row = conn.execute("SELECT * FROM queries WHERE id=?", (qid,)).fetchone()
+        row = conn.execute(f"{_QUERY_SELECT} WHERE q.id=?", (qid,)).fetchone()
 
     work_queue.submit(
         query=query_text,
@@ -223,7 +231,7 @@ def create_query():
 @bp.route("/queries/<int:qid>", methods=["GET"])
 def get_query(qid: int):
     with get_db() as conn:
-        q = conn.execute("SELECT * FROM queries WHERE id=?", (qid,)).fetchone()
+        q = conn.execute(f"{_QUERY_SELECT} WHERE q.id=?", (qid,)).fetchone()
         if not q:
             return problem(404, "Query not found")
         results = conn.execute(
@@ -297,7 +305,7 @@ def update_query(qid: int):
             conn.commit()
 
     with get_db() as conn:
-        updated = conn.execute("SELECT * FROM queries WHERE id=?", (qid,)).fetchone()
+        updated = conn.execute(f"{_QUERY_SELECT} WHERE q.id=?", (qid,)).fetchone()
     return jsonify(_serialize_query(updated))
 
 
@@ -311,6 +319,49 @@ def delete_query(qid: int):
         conn.commit()
     scheduler.poke()
     return "", 204
+
+
+@bp.route("/queries/mark-seen", methods=["POST"])
+def mark_all_seen():
+    """Clear the new-result indication on every query."""
+    with _db_lock, get_db() as conn:
+        cur = conn.execute("UPDATE results SET is_new=0 WHERE is_new=1")
+        conn.commit()
+    return jsonify({"cleared": cur.rowcount})
+
+
+@bp.route("/queries/<int:qid>/mark-seen", methods=["POST"])
+def mark_query_seen(qid: int):
+    """Clear the new-result indication on one query's results."""
+    with _db_lock, get_db() as conn:
+        if not conn.execute("SELECT id FROM queries WHERE id=?", (qid,)).fetchone():
+            return problem(404, "Query not found")
+        cur = conn.execute("UPDATE results SET is_new=0 WHERE query_id=? AND is_new=1", (qid,))
+        conn.commit()
+    return jsonify({"cleared": cur.rowcount})
+
+
+@bp.route("/queries/<int:qid>/results/<int:rid>/grab", methods=["POST"])
+def grab_result(qid: int, rid: int):
+    """Send a stored result to the download client via Prowlarr (async; poll /api/jobs/<id>)."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT r.guid, r.indexer, q.query FROM results r JOIN queries q ON q.id=r.query_id"
+            " WHERE r.id=? AND r.query_id=?",
+            (rid, qid),
+        ).fetchone()
+    if not row:
+        return problem(404, "Result not found")
+    if not row["guid"]:
+        return problem(400, "Cannot grab", "This result has no GUID to grab it by")
+
+    job = work_queue.submit(
+        query=row["query"],
+        label=f"grab:{rid}",
+        priority=Priority.HIGH,
+        runner=lambda: grab_release(row["query"], row["guid"], row["indexer"]),
+    )
+    return jsonify({"jobId": job.job_id}), 202
 
 
 @bp.route("/queries/<int:qid>/results/<int:rid>", methods=["DELETE"])
@@ -404,8 +455,11 @@ def get_job(job_id: str):
     data: dict = {"status": job.status}
     if job.status == "error":
         data["error"] = job.error
-    elif job.status in ("done",):
-        data["results"] = [_serialize_preview_result(r) for r in (job.result or [])]
+    elif job.status == "done":
+        if isinstance(job.result, str):  # grab job: a success message
+            data["message"] = job.result
+        else:
+            data["results"] = [_serialize_preview_result(r) for r in (job.result or [])]
     return jsonify(data)
 
 

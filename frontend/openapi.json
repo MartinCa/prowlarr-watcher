@@ -165,6 +165,62 @@
         }
       }
     },
+    "/queries/mark-seen": {
+      "post": {
+        "operationId": "markAllSeen",
+        "summary": "Clear the new-result indication on every query",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ClearedCount" } }
+            }
+          }
+        }
+      }
+    },
+    "/queries/{id}/mark-seen": {
+      "parameters": [{ "$ref": "#/components/parameters/QueryId" }],
+      "post": {
+        "operationId": "markQuerySeen",
+        "summary": "Clear the new-result indication on one query",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ClearedCount" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
+    "/queries/{id}/results/{resultId}/grab": {
+      "parameters": [
+        { "$ref": "#/components/parameters/QueryId" },
+        { "name": "resultId", "in": "path", "required": true, "schema": { "type": "integer" } }
+      ],
+      "post": {
+        "operationId": "grabResult",
+        "summary": "Send a stored result to the download client via Prowlarr, refreshing the release from the indexer first. Poll the returned job: done carries message, error carries the Prowlarr/client error",
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["jobId"],
+                  "properties": { "jobId": { "type": "string" } }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Problem" },
+          "404": { "$ref": "#/components/responses/Problem" }
+        }
+      }
+    },
     "/queries/{id}/run": {
       "parameters": [{ "$ref": "#/components/parameters/QueryId" }],
       "post": {
@@ -394,6 +450,7 @@
           "lastCount",
           "lastError",
           "lastNewResult",
+          "newCount",
           "excludedIndexers",
           "note",
           "audiobook",
@@ -411,6 +468,10 @@
           "lastCount": { "type": ["integer", "null"] },
           "lastError": { "type": ["string", "null"] },
           "lastNewResult": { "type": ["string", "null"], "format": "date-time" },
+          "newCount": {
+            "description": "Number of results still flagged as new (not yet viewed)",
+            "type": "integer"
+          },
           "excludedIndexers": {
             "description": "null means: inherit the default exclusion list from Settings",
             "type": ["array", "null"],
@@ -512,6 +573,7 @@
             "enum": ["queued", "running", "retrying", "done", "error"]
           },
           "error": { "type": "string" },
+          "message": { "type": "string", "description": "Success message of a grab job" },
           "results": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/PreviewResult" }
@@ -522,6 +584,11 @@
         "type": "object",
         "required": ["name", "count"],
         "properties": { "name": { "type": "string" }, "count": { "type": "integer" } }
+      },
+      "ClearedCount": {
+        "type": "object",
+        "required": ["cleared"],
+        "properties": { "cleared": { "type": "integer" } }
       },
       "DeletedCount": {
         "type": "object",

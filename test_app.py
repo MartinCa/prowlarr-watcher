@@ -2326,3 +2326,130 @@ class TestInputValidation:
         )
         assert resp.status_code == 400
         assert "excludedIndexers" in resp.get_json()["errors"]
+
+
+# ===========================================================================
+# New-result indication and grabbing
+# ===========================================================================
+class TestMarkSeen:
+    def _new(self, qid):
+        with db.get_db() as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM results WHERE query_id=? AND is_new=1", (qid,)
+            ).fetchone()[0]
+
+    def test_list_includes_new_count(self, client):
+        qid = _insert_query()
+        _insert_result(qid, guid="a")
+        _insert_result(qid, guid="b")
+        assert client.get("/api/queries").get_json()[0]["newCount"] == 2
+        assert client.get(f"/api/queries/{qid}").get_json()["newCount"] == 2
+
+    def test_mark_one_query_seen(self, client):
+        q1, q2 = _insert_query(name="a"), _insert_query(name="b")
+        _insert_result(q1, guid="a")
+        _insert_result(q2, guid="b")
+        resp = post_json(client, f"/api/queries/{q1}/mark-seen")
+        assert resp.status_code == 200
+        assert resp.get_json() == {"cleared": 1}
+        assert self._new(q1) == 0
+        assert self._new(q2) == 1
+
+    def test_mark_seen_unknown_query(self, client):
+        assert post_json(client, "/api/queries/999/mark-seen").status_code == 404
+
+    def test_mark_all_seen(self, client):
+        q1, q2 = _insert_query(name="a"), _insert_query(name="b")
+        _insert_result(q1, guid="a")
+        _insert_result(q2, guid="b")
+        assert post_json(client, "/api/queries/mark-seen").get_json() == {"cleared": 2}
+        assert self._new(q1) == self._new(q2) == 0
+
+
+class TestGrabRelease:
+    def _setup(self, guid="g1"):
+        _configure_prowlarr()
+        qid = _insert_query(query="dune")
+        _insert_result(qid, title="Dune", guid=guid, indexer="IdxA")
+        with db.get_db() as conn:
+            rid = conn.execute("SELECT id FROM results").fetchone()["id"]
+        return qid, rid
+
+    @staticmethod
+    def _response(status=200, json_body=None):
+        resp = MagicMock()
+        resp.ok = status < 400
+        resp.status_code = status
+        resp.json.return_value = json_body
+        resp.text = str(json_body or "")
+        return resp
+
+    @patch.object(worker.work_queue, "submit")
+    def test_route_submits_high_priority_job(self, mock_submit, client):
+        mock_submit.return_value = worker.Job(job_id="j1")
+        qid, rid = self._setup()
+        resp = post_json(client, f"/api/queries/{qid}/results/{rid}/grab")
+        assert resp.status_code == 202
+        assert resp.get_json() == {"jobId": "j1"}
+        kwargs = mock_submit.call_args.kwargs
+        assert kwargs["label"] == f"grab:{rid}"
+        assert kwargs["priority"] == worker.Priority.HIGH
+
+    def test_route_unknown_result(self, client):
+        qid, _ = self._setup()
+        assert post_json(client, f"/api/queries/{qid}/results/999/grab").status_code == 404
+
+    @patch("prowlarr.requests.post")
+    @patch("prowlarr.prowlarr_search_raw")
+    @patch("prowlarr.list_indexers")
+    def test_refreshes_search_then_grabs(self, mock_idx, mock_search, mock_post):
+        _configure_prowlarr()
+        mock_idx.return_value = [{"id": 7, "name": "IdxA", "enable": True}]
+        mock_search.return_value = [{"guid": "g1", "indexer": "IdxA", "indexerId": 7}]
+        mock_post.return_value = self._response(200, {})
+        msg = prowlarr.grab_release("dune", "g1", "IdxA")
+        assert "download client" in msg
+        mock_search.assert_called_once_with("dune", indexer_ids=[7])
+        assert mock_post.call_args.kwargs["json"] == {"guid": "g1", "indexerId": 7}
+        assert mock_post.call_args.args[0] == "http://localhost:9696/api/v1/search"
+
+    @patch("prowlarr.requests.post")
+    @patch("prowlarr.prowlarr_search_raw")
+    @patch("prowlarr.list_indexers")
+    def test_release_gone(self, mock_idx, mock_search, mock_post):
+        _configure_prowlarr()
+        mock_idx.return_value = []
+        mock_search.return_value = [{"guid": "other", "indexer": "IdxA", "indexerId": 7}]
+        with pytest.raises(prowlarr.GrabError, match="no longer returns"):
+            prowlarr.grab_release("dune", "g1", "IdxA")
+        mock_post.assert_not_called()
+
+    @patch("prowlarr.requests.post")
+    @patch("prowlarr.prowlarr_search_raw")
+    @patch("prowlarr.list_indexers")
+    def test_prowlarr_error_message_surfaced(self, mock_idx, mock_search, mock_post):
+        _configure_prowlarr()
+        mock_idx.return_value = []
+        mock_search.return_value = [{"guid": "g1", "indexer": "IdxA", "indexerId": 7}]
+        mock_post.return_value = self._response(409, {"message": "Client refused: no space"})
+        with pytest.raises(prowlarr.GrabError, match="Client refused: no space"):
+            prowlarr.grab_release("dune", "g1", "IdxA")
+
+    def test_get_job_returns_grab_message(self, client):
+        job = worker.Job(job_id="gj", status="done", result="Sent")
+        with patch.object(worker.work_queue, "get_job", return_value=job):
+            assert client.get("/api/jobs/gj").get_json() == {"status": "done", "message": "Sent"}
+
+    def test_worker_runner_error_is_plain_message(self):
+        q = worker.WorkQueue()
+
+        def boom():
+            raise prowlarr.GrabError("Client refused")
+
+        job = q.submit(query="x", label="grab:1", runner=boom)
+        with patch.object(worker.time, "sleep"), patch.object(q._pq, "get") as mock_get:
+            mock_get.side_effect = [job, SystemExit]
+            with pytest.raises(SystemExit):
+                q._worker()
+        assert job.status == "error"
+        assert job.error == "Client refused"
