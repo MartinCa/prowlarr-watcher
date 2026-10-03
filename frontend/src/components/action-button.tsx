@@ -3,7 +3,7 @@ import { Loader2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { ActionStatus } from "@/hooks/use-async-action";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 type ActionButtonBaseProps = Omit<ComponentProps<typeof Button>, "children"> & {
   /** The button's resting icon (a lucide icon component). It stays visible after the action, tinted by the result. */

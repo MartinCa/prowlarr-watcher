@@ -1,6 +1,6 @@
 import { BookOpen, Headphones, Sparkles } from "lucide-react";
 import type { QueryFilterState } from "@/features/queries/filters";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 const FILTERS = [
   { key: "newOnly", label: "New results", Icon: Sparkles },

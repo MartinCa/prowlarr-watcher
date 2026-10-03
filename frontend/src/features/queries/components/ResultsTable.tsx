@@ -22,7 +22,7 @@ import { useGrabResult, useJob } from "@/features/queries/hooks";
 import { formatRelativeTime, formatSize, sanitizeUrl } from "@/lib/format";
 import { notifications } from "@/lib/notifications";
 import type { PreviewResult, Result } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 function seederColor(seeders: number | null | undefined): string {
   if (seeders == null) return "text-muted-foreground";

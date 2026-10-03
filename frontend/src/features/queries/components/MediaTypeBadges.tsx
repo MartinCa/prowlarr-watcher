@@ -1,5 +1,5 @@
 import { BookOpen, Headphones } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 const MEDIA_TYPES = [
   { key: "audiobook", label: "Audiobook", Icon: Headphones },
