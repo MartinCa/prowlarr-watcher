@@ -10,7 +10,7 @@ import { useDeleteQuery, useRunQuery, useUpdateQuery } from "@/features/queries/
 import { ApiError } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/format";
 import type { Query } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 export function QueryCard({
   query,
