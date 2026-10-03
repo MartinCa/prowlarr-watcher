@@ -21,7 +21,8 @@ export const queriesApi = {
   resultIndexers: () => api.get<{ indexers: ResultIndexer[] }>("/results/indexers"),
   clearIndexerResults: (indexer: string) =>
     api.delete<{ deleted: number }>("/results", { query: { indexer } }),
-  markSeen: (qid: number) => api.post<{ cleared: number }>(`/queries/${qid}/mark-seen`),
+  markSeen: (qid: number, resultIds: number[]) =>
+    api.post<{ cleared: number }>(`/queries/${qid}/mark-seen`, { resultIds }),
   markAllSeen: () => api.post<{ cleared: number }>("/queries/mark-seen"),
   grabResult: (qid: number, rid: number) =>
     api.post<{ jobId: string }>(`/queries/${qid}/results/${rid}/grab`),

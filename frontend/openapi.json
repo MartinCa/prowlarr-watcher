@@ -183,7 +183,17 @@
       "parameters": [{ "$ref": "#/components/parameters/QueryId" }],
       "post": {
         "operationId": "markQuerySeen",
-        "summary": "Clear the new-result indication on one query",
+        "summary": "Clear the new-result indication on one query (only the given resultIds if provided, else all)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "resultIds": { "type": "array", "items": { "type": "integer" } } }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK",

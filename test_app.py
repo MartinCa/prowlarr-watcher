@@ -2418,7 +2418,7 @@ class TestGrabRelease:
     @patch("prowlarr.list_indexers")
     def test_release_gone(self, mock_idx, mock_search, mock_post):
         _configure_prowlarr()
-        mock_idx.return_value = []
+        mock_idx.return_value = [{"id": 7, "name": "IdxA", "enable": True}]
         mock_search.return_value = [{"guid": "other", "indexer": "IdxA", "indexerId": 7}]
         with pytest.raises(prowlarr.GrabError, match="no longer returns"):
             prowlarr.grab_release("dune", "g1", "IdxA")
@@ -2429,7 +2429,7 @@ class TestGrabRelease:
     @patch("prowlarr.list_indexers")
     def test_prowlarr_error_message_surfaced(self, mock_idx, mock_search, mock_post):
         _configure_prowlarr()
-        mock_idx.return_value = []
+        mock_idx.return_value = [{"id": 7, "name": "IdxA", "enable": True}]
         mock_search.return_value = [{"guid": "g1", "indexer": "IdxA", "indexerId": 7}]
         mock_post.return_value = self._response(409, {"message": "Client refused: no space"})
         with pytest.raises(prowlarr.GrabError, match="Client refused: no space"):
@@ -2453,3 +2453,42 @@ class TestGrabRelease:
                 q._worker()
         assert job.status == "error"
         assert job.error == "Client refused"
+
+
+class TestReviewFollowUps:
+    def test_mark_seen_only_given_ids(self, client):
+        qid = _insert_query()
+        _insert_result(qid, guid="a")
+        _insert_result(qid, guid="b")
+        with db.get_db() as conn:
+            ids = [r["id"] for r in conn.execute("SELECT id FROM results ORDER BY id")]
+        resp = post_json(client, f"/api/queries/{qid}/mark-seen", {"resultIds": [ids[0]]})
+        assert resp.get_json() == {"cleared": 1}
+        with db.get_db() as conn:
+            left = conn.execute("SELECT id FROM results WHERE is_new=1").fetchall()
+        assert [r["id"] for r in left] == [ids[1]]
+
+    def test_mark_seen_rejects_bad_ids(self, client):
+        qid = _insert_query()
+        resp = post_json(client, f"/api/queries/{qid}/mark-seen", {"resultIds": ["x"]})
+        assert resp.status_code == 400
+
+    def test_results_index_exists(self):
+        with db.get_db() as conn:
+            names = {r[1] for r in conn.execute("PRAGMA index_list(results)")}
+        assert "idx_results_query_new" in names
+
+    @patch("prowlarr.prowlarr_search_raw")
+    @patch("prowlarr.list_indexers")
+    def test_unknown_indexer_does_not_search(self, mock_idx, mock_search):
+        _configure_prowlarr()
+        mock_idx.return_value = [{"id": 1, "name": "Other", "enable": True}]
+        with pytest.raises(prowlarr.GrabError, match="no longer configured"):
+            prowlarr.grab_release("dune", "g1", "IdxA")
+        mock_search.assert_not_called()
+
+    @patch("prowlarr.list_indexers", side_effect=prowlarr.requests.exceptions.ConnectionError("x"))
+    def test_unreachable_prowlarr_is_a_grab_error(self, _mock_idx):
+        _configure_prowlarr()
+        with pytest.raises(prowlarr.GrabError, match="Could not refresh"):
+            prowlarr.grab_release("dune", "g1", "IdxA")

@@ -332,11 +332,28 @@ def mark_all_seen():
 
 @bp.route("/queries/<int:qid>/mark-seen", methods=["POST"])
 def mark_query_seen(qid: int):
-    """Clear the new-result indication on one query's results."""
+    """Clear the new-result indication on one query's results.
+
+    With `resultIds`, only those results are cleared, so a result stored after the client
+    loaded the page (and so never shown) keeps its indication. Without it, all are cleared.
+    """
+    body = request.get_json(silent=True) or {}
+    ids = body.get("resultIds")
+    if ids is not None and (
+        not isinstance(ids, list) or any(not isinstance(i, int) or isinstance(i, bool) for i in ids)
+    ):
+        return problem(
+            400, "Validation failed", errors={"resultIds": ["Must be a list of integers"]}
+        )
     with _db_lock, get_db() as conn:
         if not conn.execute("SELECT id FROM queries WHERE id=?", (qid,)).fetchone():
             return problem(404, "Query not found")
-        cur = conn.execute("UPDATE results SET is_new=0 WHERE query_id=? AND is_new=1", (qid,))
+        sql = "UPDATE results SET is_new=0 WHERE query_id=? AND is_new=1"
+        args: list = [qid]
+        if ids is not None:
+            sql += f" AND id IN ({','.join('?' * len(ids))})"
+            args += ids
+        cur = conn.execute(sql, args)
         conn.commit()
     return jsonify({"cleared": cur.rowcount})
 

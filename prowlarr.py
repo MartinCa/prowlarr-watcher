@@ -125,9 +125,11 @@ def grab_release(query: str, guid: str, indexer_name: str | None) -> str:
     if not base or not api_key:
         raise GrabError("Prowlarr URL and API key must be configured in Settings")
 
-    indexer_ids = [i["id"] for i in list_indexers() if i["name"] == indexer_name]
     try:
-        fresh = prowlarr_search_raw(query, indexer_ids=indexer_ids or None)
+        indexer_ids = [i["id"] for i in list_indexers() if i["name"] == indexer_name]
+        if not indexer_ids:
+            raise GrabError(f"Indexer {indexer_name!r} is no longer configured in Prowlarr")
+        fresh = prowlarr_search_raw(query, indexer_ids=indexer_ids)
     except requests.exceptions.RequestException as exc:
         raise GrabError(f"Could not refresh the release from Prowlarr: {exc}") from exc
 

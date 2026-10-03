@@ -137,7 +137,7 @@ export function useSearchPreview() {
 export function useMarkQuerySeen(qid: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => queriesApi.markSeen(qid),
+    mutationFn: (resultIds: number[]) => queriesApi.markSeen(qid, resultIds),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.all, exact: true }),
   });
 }

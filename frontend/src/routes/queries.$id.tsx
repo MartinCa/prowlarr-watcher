@@ -46,14 +46,22 @@ function QueryDetailPage() {
   const clearResults = useClearQueryResults(qid);
 
   const markSeen = useMarkQuerySeen(qid);
-  const hasNew = detail.data?.results.some((r) => r.isNew) ?? false;
+  const newIdsKey =
+    detail.data?.results
+      .filter((r) => r.isNew)
+      .map((r) => r.id)
+      .join(",") ?? "";
   const { mutate: markSeenMutate } = markSeen;
 
-  // Viewing the query clears its new indication; this page keeps showing the highlights
-  // it loaded (the mutation deliberately does not refetch the detail).
+  // Viewing the query clears the new indication of exactly the results shown here (not ones
+  // stored after this fetch). The page keeps showing the highlights it loaded, since the
+  // mutation deliberately does not refetch the detail.
   useEffect(() => {
-    if (hasNew) markSeenMutate();
-  }, [hasNew, qid, markSeenMutate]);
+    if (!newIdsKey) return;
+    markSeenMutate(newIdsKey.split(",").map(Number), {
+      onError: (error) => console.error("Failed to clear new-result indication", error),
+    });
+  }, [newIdsKey, markSeenMutate]);
 
   const settingsRef = useRef<HTMLDetailsElement>(null);
 

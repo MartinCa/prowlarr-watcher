@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +10,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useGrabResult, useJob } from "@/features/queries/hooks";
-import { ApiError } from "@/lib/api";
 import { formatRelativeTime, formatSize, sanitizeUrl } from "@/lib/format";
 import type { PreviewResult, Result } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -90,6 +88,7 @@ export function ResultsTable({ results }: { results: PreviewResult[] }) {
  * answer next to the button.
  */
 function GrabButton({ qid, result }: { qid: number; result: Result }) {
+  const safeDownloadUrl = sanitizeUrl(result.downloadUrl);
   const grab = useGrabResult(qid);
   const [jobId, setJobId] = useState<string>();
   const job = useJob(jobId);
@@ -114,7 +113,6 @@ function GrabButton({ qid, result }: { qid: number; result: Result }) {
     setJobId(undefined);
     grab.mutate(result.id, {
       onSuccess: (data) => setJobId(data.jobId),
-      onError: (error) => toast.error(error instanceof ApiError ? error.message : "Grab failed"),
     });
   }
 
@@ -133,6 +131,17 @@ function GrabButton({ qid, result }: { qid: number; result: Result }) {
       >
         {inFlight ? "Grabbing…" : "Grab"}
       </Button>
+      {safeDownloadUrl && (
+        <a
+          href={safeDownloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-muted-foreground text-xs hover:underline"
+          title="Download the release directly"
+        >
+          ↓ Download
+        </a>
+      )}
       {outcome && (
         <span
           role="status"

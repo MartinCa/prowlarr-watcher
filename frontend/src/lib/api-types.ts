@@ -144,7 +144,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Clear the new-result indication on one query */
+    /** Clear the new-result indication on one query (only the given resultIds if provided, else all) */
     post: operations["markQuerySeen"];
     delete?: never;
     options?: never;
@@ -699,7 +699,13 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody?: {
+      content: {
+        "application/json": {
+          resultIds?: number[];
+        };
+      };
+    };
     responses: {
       /** @description OK */
       200: {
