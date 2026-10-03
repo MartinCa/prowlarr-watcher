@@ -213,8 +213,8 @@ importers:
         version: 1.4.0
     devDependencies:
       '@martinrun/frontend-config':
-        specifier: 0.3.0
-        version: 0.3.0(eslint@10.11.0(jiti@2.7.0)(supports-color@10.2.2))(prettier-plugin-tailwindcss@0.8.1(prettier@3.9.9))(prettier@3.9.9)(supports-color@10.2.2)(typescript@6.0.3)
+        specifier: 0.3.2
+        version: 0.3.2(eslint@10.11.0(jiti@2.7.0)(supports-color@10.2.2))(prettier-plugin-tailwindcss@0.8.1(prettier@3.9.9))(prettier@3.9.9)(supports-color@10.2.2)(typescript@6.0.3)
       '@tanstack/router-plugin':
         specifier: 1.168.41
         version: 1.168.41(@tanstack/react-router@1.170.40(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(rolldown@1.2.11)(supports-color@10.2.2)(vite@8.3.1(@types/node@24.19.0)(jiti@2.7.0))
@@ -538,8 +538,8 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@martinrun/frontend-config@0.3.0':
-    resolution: {integrity: sha512-d/dJ5PGu2eWKH3seAcCA96cowhUsxwDxURceH2Dvpo+xLNvWmZscOcmbr0wVv4AWp/EQ1WOQ92VRpGh6HbB8FQ==}
+  '@martinrun/frontend-config@0.3.2':
+    resolution: {integrity: sha512-EQyjVWuM5PFfgxXunRjafDxap/PHsm1ig2NbY5zhdZzEgUh6SGtVlVwPQLQTiP945jboTkFQsZnw4E5s/+2UTQ==}
     peerDependencies:
       eslint: '>=9'
       prettier: '>=3'
@@ -3315,7 +3315,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@martinrun/frontend-config@0.3.0(eslint@10.11.0(jiti@2.7.0)(supports-color@10.2.2))(prettier-plugin-tailwindcss@0.8.1(prettier@3.9.9))(prettier@3.9.9)(supports-color@10.2.2)(typescript@6.0.3)':
+  '@martinrun/frontend-config@0.3.2(eslint@10.11.0(jiti@2.7.0)(supports-color@10.2.2))(prettier-plugin-tailwindcss@0.8.1(prettier@3.9.9))(prettier@3.9.9)(supports-color@10.2.2)(typescript@6.0.3)':
     dependencies:
       '@eslint/js': 10.0.1(eslint@10.11.0(jiti@2.7.0)(supports-color@10.2.2))
       '@tanstack/eslint-plugin-query': 5.104.0(eslint@10.11.0(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3)
