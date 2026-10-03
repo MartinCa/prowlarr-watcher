@@ -131,9 +131,9 @@ function QueryDetailPage() {
     );
   }
 
-  function saveNote() {
+  function saveNote(value: string | undefined = noteInput) {
     updateQuery.mutate(
-      { note: noteInput?.trim() || null },
+      { note: value?.trim() || null },
       {
         onSuccess: () => toast.success("Note saved"),
         onError: () => toast.error("Failed to save note"),
@@ -279,9 +279,26 @@ function QueryDetailPage() {
                 placeholder="e.g. Only the remastered release"
                 onChange={(e) => setNoteInput(e.target.value)}
               />
-              <Button size="sm" variant="outline" onClick={saveNote}>
+              <Button size="sm" variant="outline" onClick={() => saveNote()}>
                 Save
               </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {["Audiobook", "Ebook"].map((label) => (
+                <Button
+                  key={label}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const trimmed = note.trim();
+                    const next = trimmed ? `${trimmed}, ${label}` : label;
+                    setNoteInput(next);
+                    saveNote(next);
+                  }}
+                >
+                  + {label}
+                </Button>
+              ))}
             </div>
             <p className="text-muted-foreground text-xs">
               Shown as the first line of new-result notifications for this query.
