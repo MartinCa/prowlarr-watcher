@@ -44,7 +44,9 @@ def init_db():
                 last_error         TEXT,
                 excluded_indexers  TEXT,
                 last_new_result    TEXT,
-                note               TEXT
+                note               TEXT,
+                audiobook          INTEGER NOT NULL DEFAULT 1,
+                ebook              INTEGER NOT NULL DEFAULT 1
             );
 
             CREATE TABLE IF NOT EXISTS results (
@@ -89,6 +91,11 @@ def init_db():
         if "note" not in cols:
             conn.execute("ALTER TABLE queries ADD COLUMN note TEXT")
             conn.commit()
+        if "audiobook" not in cols and "ebook" not in cols:
+            conn.execute("ALTER TABLE queries ADD COLUMN audiobook INTEGER NOT NULL DEFAULT 1")
+            conn.execute("ALTER TABLE queries ADD COLUMN ebook INTEGER NOT NULL DEFAULT 1")
+            _migrate_note_media_flags(conn)
+            conn.commit()
 
         # Backfill last_new_result from existing results
         row = conn.execute(
@@ -113,6 +120,30 @@ def init_db():
             conn.commit()
 
         _migrate_indexer_scoped_hashes(conn)
+
+
+def split_note_media_flags(note: str | None) -> tuple[str | None, bool, bool]:
+    """Pull "Audiobook" / "Ebook" comma-separated parts out of a note.
+
+    Returns (cleaned note, audiobook, ebook). Neither or both present means both flags on.
+    """
+    parts = [p.strip() for p in (note or "").split(",")]
+    audiobook = any(p.lower() == "audiobook" for p in parts)
+    ebook = any(p.lower() == "ebook" for p in parts)
+    kept = [p for p in parts if p and p.lower() not in ("audiobook", "ebook")]
+    if not audiobook and not ebook:
+        audiobook = ebook = True
+    return (", ".join(kept) or None), audiobook, ebook
+
+
+def _migrate_note_media_flags(conn: sqlite3.Connection):
+    """One-time: derive audiobook/ebook flags from existing notes and strip those words."""
+    for row in conn.execute("SELECT id, note FROM queries").fetchall():
+        note, audiobook, ebook = split_note_media_flags(row["note"])
+        conn.execute(
+            "UPDATE queries SET note=?, audiobook=?, ebook=? WHERE id=?",
+            (note, int(audiobook), int(ebook), row["id"]),
+        )
 
 
 def _migrate_indexer_scoped_hashes(conn: sqlite3.Connection):

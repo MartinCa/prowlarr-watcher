@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MediaTypeToggles } from "@/features/queries/components/MediaTypeBadges";
 import { ResultsTable } from "@/features/queries/components/ResultsTable";
 import { useCreateQuery, useJob, useSearchPreview } from "@/features/queries/hooks";
 import { cronGuruUrl, describeCron } from "@/lib/format";
@@ -22,6 +23,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
   const [name, setName] = useState("");
   const [cron, setCron] = useState("");
   const [note, setNote] = useState("");
+  const [media, setMedia] = useState({ audiobook: true, ebook: true });
   const [jobId, setJobId] = useState<string>();
 
   const searchPreview = useSearchPreview();
@@ -40,6 +42,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
     setName("");
     setCron("");
     setNote("");
+    setMedia({ audiobook: true, ebook: true });
     setJobId(undefined);
   }
 
@@ -61,6 +64,7 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
         name: name.trim() || undefined,
         cron: cron.trim() || undefined,
         note: note.trim() || undefined,
+        ...media,
       },
       {
         onSuccess: () => {
@@ -121,6 +125,14 @@ export function AddQueryDialog({ defaultCron }: { defaultCron: string }) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Ubuntu ISOs"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label>Requested</Label>
+            <MediaTypeToggles
+              value={media}
+              onChange={(key, next) => setMedia({ ...media, [key]: next })}
             />
           </div>
 

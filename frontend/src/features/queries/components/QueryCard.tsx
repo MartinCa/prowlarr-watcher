@@ -3,6 +3,7 @@ import { CirclePlay, Pause, Play, StickyNote, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { MediaTypeIcons } from "@/features/queries/components/MediaTypeBadges";
 import { QueryStatusBadge } from "@/features/queries/components/QueryStatusBadge";
 import { useDeleteQuery, useRunQuery, useUpdateQuery } from "@/features/queries/hooks";
 import { ApiError } from "@/lib/api";
@@ -46,6 +47,7 @@ export function QueryCard({
           >
             {query.name}
           </Link>
+          <MediaTypeIcons value={query} />
           {hasNote && (
             <button
               type="button"

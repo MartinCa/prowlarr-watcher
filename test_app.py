@@ -266,6 +266,49 @@ class TestDatabase:
 
         assert "uniqueness conflict" in caplog.text
 
+    def test_migration_derives_media_flags_from_note(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(db, "DATA_DIR", tmp_path)
+        monkeypatch.setattr(db, "DB_PATH", tmp_path / "media.db")
+        conn = sqlite3.connect(str(tmp_path / "media.db"))
+        conn.executescript("""
+            CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE queries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, query TEXT NOT NULL,
+                cron TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL,
+                last_run TEXT, next_run TEXT, last_count INTEGER DEFAULT 0, last_error TEXT,
+                excluded_indexers TEXT, last_new_result TEXT, note TEXT
+            );
+            INSERT INTO queries (id, name, query, created_at, note) VALUES
+                (1, 'none', 'q', 'x', NULL),
+                (2, 'plain', 'q', 'x', 'Only remastered'),
+                (3, 'both', 'q', 'x', 'Audiobook, Ebook'),
+                (4, 'audio', 'q', 'x', 'Only remastered, audiobook'),
+                (5, 'ebook', 'q', 'x', 'Ebook');
+        """)
+        conn.commit()
+        conn.close()
+
+        db.init_db()
+
+        with db.get_db() as c:
+            rows = {
+                r["id"]: (r["note"], r["audiobook"], r["ebook"])
+                for r in c.execute("SELECT id, note, audiobook, ebook FROM queries")
+            }
+        assert rows[1] == (None, 1, 1)
+        assert rows[2] == ("Only remastered", 1, 1)
+        assert rows[3] == (None, 1, 1)
+        assert rows[4] == ("Only remastered", 1, 0)
+        assert rows[5] == (None, 0, 1)
+
+        # Idempotent: a second run must not re-derive flags
+        with db.get_db() as c:
+            c.execute("UPDATE queries SET ebook=0 WHERE id=3")
+            c.commit()
+        db.init_db()
+        with db.get_db() as c:
+            assert c.execute("SELECT ebook FROM queries WHERE id=3").fetchone()[0] == 0
+
     def test_migration_backfills_last_new_result_from_results(self, tmp_path, monkeypatch):
         db_path = tmp_path / "migration_test.db"
         monkeypatch.setattr(db, "DATA_DIR", tmp_path)
@@ -1555,6 +1598,31 @@ class TestUpdateQuery:
 
         data = client.get(f"/api/queries/{qid}").get_json()
         assert data["note"] is None
+
+    def test_media_flags_default_on(self, client):
+        qid = _insert_query()
+        data = client.get(f"/api/queries/{qid}").get_json()
+        assert data["audiobook"] is True
+        assert data["ebook"] is True
+
+    def test_update_media_flags(self, client):
+        qid = _insert_query()
+        patch_json(client, f"/api/queries/{qid}", {"ebook": False})
+        data = client.get(f"/api/queries/{qid}").get_json()
+        assert data["audiobook"] is True
+        assert data["ebook"] is False
+
+    def test_update_media_flag_rejects_non_boolean(self, client):
+        qid = _insert_query()
+        resp = patch_json(client, f"/api/queries/{qid}", {"audiobook": "no"})
+        assert resp.status_code == 400
+        assert "audiobook" in resp.get_json()["errors"]
+
+    def test_create_with_media_flags(self, client):
+        resp = post_json(client, "/api/queries", {"query": "dune", "audiobook": False})
+        data = resp.get_json()
+        assert data["audiobook"] is False
+        assert data["ebook"] is True
 
     def test_update_nonexistent(self, client):
         resp = patch_json(client, "/api/queries/9999", {"enabled": False})

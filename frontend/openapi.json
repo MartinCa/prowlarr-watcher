@@ -61,7 +61,7 @@
       },
       "patch": {
         "operationId": "updateQuery",
-        "summary": "Partially update a query (enabled, cron, note, or excludedIndexers)",
+        "summary": "Partially update a query (enabled, cron, note, audiobook, ebook, or excludedIndexers)",
         "requestBody": {
           "required": true,
           "content": {
@@ -395,7 +395,9 @@
           "lastError",
           "lastNewResult",
           "excludedIndexers",
-          "note"
+          "note",
+          "audiobook",
+          "ebook"
         ],
         "properties": {
           "id": { "type": "integer" },
@@ -417,7 +419,9 @@
           "note": {
             "description": "Optional note shown as the first line of new-result notifications",
             "type": ["string", "null"]
-          }
+          },
+          "audiobook": { "description": "An audiobook release is requested", "type": "boolean" },
+          "ebook": { "description": "An ebook release is requested", "type": "boolean" }
         }
       },
       "QueryDetail": {
@@ -483,7 +487,9 @@
           "query": { "type": "string" },
           "name": { "type": "string" },
           "cron": { "type": "string" },
-          "note": { "type": "string" }
+          "note": { "type": "string" },
+          "audiobook": { "type": "boolean", "default": true },
+          "ebook": { "type": "boolean", "default": true }
         }
       },
       "UpdateQueryRequest": {
@@ -492,7 +498,9 @@
           "enabled": { "type": "boolean" },
           "cron": { "type": ["string", "null"] },
           "excludedIndexers": { "type": ["array", "null"], "items": { "type": "integer" } },
-          "note": { "type": ["string", "null"] }
+          "note": { "type": ["string", "null"] },
+          "audiobook": { "type": "boolean" },
+          "ebook": { "type": "boolean" }
         }
       },
       "Job": {

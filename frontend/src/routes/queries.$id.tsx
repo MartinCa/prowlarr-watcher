@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MediaTypeToggles } from "@/features/queries/components/MediaTypeBadges";
 import { IndexerChecklist } from "@/features/queries/components/IndexerChecklist";
 import { StoredResultsTable } from "@/features/queries/components/ResultsTable";
 import {
@@ -199,6 +200,17 @@ function QueryDetailPage() {
           {query.enabled && query.nextRun ? formatRelativeTime(query.nextRun) : "—"}
         </Field>
         <Field label="Total results">{query.results.length}</Field>
+        <Field label="Requested">
+          <MediaTypeToggles
+            value={query}
+            onChange={(key, next) =>
+              updateQuery.mutate(
+                { [key]: next },
+                { onError: () => toast.error("Failed to update requested media") },
+              )
+            }
+          />
+        </Field>
         {query.note && (
           <Field label="Note">
             <EditFieldButton label="Note" onClick={() => focusSettings("note-input")} />
