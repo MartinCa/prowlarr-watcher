@@ -43,8 +43,9 @@ drop-in replacement for `clsx` + `tailwind-merge`, installed via `npx shadcn mig
 on Tailwind v4 projects; new `shadcn init` scaffolds already use it — the migration
 command is a no-op if the project doesn't already have `clsx`/`tailwind-merge` in
 `lib/utils.ts`, so don't go looking for something to run on a fresh project),
-`class-variance-authority` (these come with shadcn), `sonner` for toasts, `cmdk` for
-command palettes.
+`class-variance-authority` (these come with shadcn), `cmdk` for command palettes. Toasts are
+not a library choice: use the kit's Base UI toast (`MartinCa/frontend-kit/toast`, section 5.1) —
+do not add `sonner`.
 
 Everything else requires a one-line justification in the PR description. Prefer writing
 30 lines over adding a dependency for something small. Prefer a dependency over writing
@@ -240,6 +241,52 @@ src/
 - **Responsive down to a phone (375px).** If a table cannot work at 375px, show a card list instead.
   - **Flex child text truncation**: In flex rows where text sits alongside fixed-width elements (badges, buttons, icons), the text container must have `min-w-0 flex-1` for `truncate` or `break-words` to take effect and prevent horizontal scrollbars.
   - **Monospace & diff blocks**: Components displaying arbitrary paths, URLs, commit hashes, or code/diff blocks must include `break-all` alongside `whitespace-pre-wrap` (or an explicit `overflow-x-auto` container) so unbroken strings wrap cleanly on narrow screens.
+
+### 5.1 Notifications and async action buttons
+
+**Toasts.** Install `MartinCa/frontend-kit/toast` (a Base UI toast wrapper plus a
+`notifications` helper), mount `<Toaster />` once at the app root, and call
+`notifications.success | error | info | warning(title, options)` from anywhere. Never import a
+toast library directly.
+
+- `description` adds a secondary line, e.g. the server's error detail.
+- Errors default to a 10 s timeout so they can be read; other types use the manager default.
+- `{ timeout: ms }` overrides the delay; `{ persistent: true }` keeps the toast until it is
+  dismissed (use it for failures the user must act on).
+- Result *text* belongs in a toast, never inline next to a control — inline text blows out
+  table cells and mobile layouts.
+
+**Async action buttons.** For an action with a visible outcome (grab, retry, sync, send), use
+`MartinCa/frontend-kit/action-button`:
+
+```tsx
+const { status, run } = useAsyncAction(grab);
+
+<ActionButton
+  icon={HardDriveDownloadIcon}
+  label="Send to download client"
+  resultLabel={status === "success" ? "Sent" : "Failed"}
+  status={status}
+  onClick={async () => {
+    const outcome = await run(id);
+    if (outcome.ok) notifications.success("Sent to the download client");
+    else notifications.error("Grab failed", { description: String(outcome.error) });
+  }}
+/>;
+```
+
+- States: idle shows the icon; pending swaps in a spinner (same size, no layout shift) and
+  disables the button; success / error tint the **same icon** with `text-status-ok` /
+  `text-status-error`. The tint stays until the next click or until the button unmounts —
+  navigating away or changing context resets it. Nothing is persisted.
+- Colour is never the only signal: pass `resultLabel` so the accessible name and tooltip
+  change, and report the outcome in a toast.
+- When the status comes from elsewhere (a mutation plus a polled job), derive an
+  `ActionStatus` (`"idle" | "pending" | "success" | "error"`) and pass it to `<ActionButton>`
+  directly; `useAsyncAction` is only for plain promises. The two parts are deliberately
+  independent so polling stays in the app.
+- Secondary actions on the same row (download link, clear, delete) go in an overflow menu so
+  the primary action keeps its column narrow on a phone.
 
 ---
 

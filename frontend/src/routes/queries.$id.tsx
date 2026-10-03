@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Pencil } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { notifications } from "@/lib/notifications";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -95,7 +95,7 @@ function QueryDetailPage() {
     if (!confirm("Delete this query and all its results?")) return;
     deleteQuery.mutate(qid, {
       onSuccess: () => {
-        toast.success("Query deleted");
+        notifications.success("Query deleted");
         void navigate({ to: "/" });
       },
       onError: (error) => {
@@ -104,19 +104,19 @@ function QueryDetailPage() {
         if (alreadyGone) {
           void navigate({ to: "/" });
         } else {
-          toast.error(error instanceof ApiError ? error.message : "Delete failed");
+          notifications.error(error instanceof ApiError ? error.message : "Delete failed");
         }
       },
     });
   }
 
   function onClearError(error: Error) {
-    toast.error(error instanceof ApiError ? error.message : "Clear failed");
+    notifications.error(error instanceof ApiError ? error.message : "Clear failed");
   }
 
   function handleClearResult(result: Result) {
     deleteResult.mutate(result.id, {
-      onSuccess: () => toast.success("Result cleared — it will notify again if seen"),
+      onSuccess: () => notifications.success("Result cleared — it will notify again if seen"),
       onError: onClearError,
     });
   }
@@ -125,7 +125,7 @@ function QueryDetailPage() {
     if (!confirm("Clear all results of this query? They will all notify again on the next run."))
       return;
     clearResults.mutate(undefined, {
-      onSuccess: (data) => toast.success(`Cleared ${data.deleted} results`),
+      onSuccess: (data) => notifications.success(`Cleared ${data.deleted} results`),
       onError: onClearError,
     });
   }
@@ -145,8 +145,8 @@ function QueryDetailPage() {
     updateQuery.mutate(
       { cron: cronInput?.trim() || null },
       {
-        onSuccess: () => toast.success("Schedule saved"),
-        onError: () => toast.error("Failed to save schedule"),
+        onSuccess: () => notifications.success("Schedule saved"),
+        onError: () => notifications.error("Failed to save schedule"),
       },
     );
   }
@@ -155,8 +155,8 @@ function QueryDetailPage() {
     updateQuery.mutate(
       { note: noteInput?.trim() || null },
       {
-        onSuccess: () => toast.success("Note saved"),
-        onError: () => toast.error("Failed to save note"),
+        onSuccess: () => notifications.success("Note saved"),
+        onError: () => notifications.error("Failed to save note"),
       },
     );
   }
@@ -165,8 +165,8 @@ function QueryDetailPage() {
     updateQuery.mutate(
       { excludedIndexers: override ? excluded : null },
       {
-        onSuccess: () => toast.success("Indexer exclusions saved"),
-        onError: () => toast.error("Failed to save indexer exclusions"),
+        onSuccess: () => notifications.success("Indexer exclusions saved"),
+        onError: () => notifications.error("Failed to save indexer exclusions"),
       },
     );
   }
@@ -226,7 +226,7 @@ function QueryDetailPage() {
             onChange={(key, next) =>
               updateQuery.mutate(
                 { [key]: next },
-                { onError: () => toast.error("Failed to update requested media") },
+                { onError: () => notifications.error("Failed to update requested media") },
               )
             }
           />

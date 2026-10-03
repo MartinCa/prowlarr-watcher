@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Search, X } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
+import { notifications } from "@/lib/notifications";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AddQueryDialog } from "@/features/queries/components/AddQueryDialog";
@@ -67,9 +67,11 @@ function QueryListPage() {
 
   function handleMarkAllSeen() {
     markAllSeen.mutate(undefined, {
-      onSuccess: (data) => toast.success(`Cleared ${data.cleared} new results`),
+      onSuccess: (data) => notifications.success(`Cleared ${data.cleared} new results`),
       onError: (error) =>
-        toast.error(error instanceof ApiError ? error.message : "Failed to clear new results"),
+        notifications.error(
+          error instanceof ApiError ? error.message : "Failed to clear new results",
+        ),
     });
   }
 
