@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { CirclePlay, Pause, Play, StickyNote, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MediaTypeIcons } from "@/features/queries/components/MediaTypeBadges";
 import { QueryStatusBadge } from "@/features/queries/components/QueryStatusBadge";
@@ -47,6 +48,11 @@ export function QueryCard({
           >
             {query.name}
           </Link>
+          {query.newCount > 0 && (
+            <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
+              {query.newCount} new
+            </Badge>
+          )}
           <MediaTypeIcons value={query} />
           {hasNote && (
             <button

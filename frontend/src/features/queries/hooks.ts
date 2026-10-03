@@ -129,3 +129,29 @@ export function useSearchPreview() {
     mutationFn: (query: string) => queriesApi.searchPreview(query),
   });
 }
+
+/**
+ * Clears the "new" flags of one query. Only the list is refetched (`exact`): refetching the
+ * detail would drop the New highlights from the page the user is looking at.
+ */
+export function useMarkQuerySeen(qid: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (resultIds: number[]) => queriesApi.markSeen(qid, resultIds),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.all, exact: true }),
+  });
+}
+
+export function useMarkAllSeen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => queriesApi.markAllSeen(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.all }),
+  });
+}
+
+export function useGrabResult(qid: number) {
+  return useMutation({
+    mutationFn: (rid: number) => queriesApi.grabResult(qid, rid),
+  });
+}

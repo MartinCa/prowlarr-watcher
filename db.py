@@ -121,6 +121,14 @@ def init_db():
 
         _migrate_indexer_scoped_hashes(conn)
 
+        # Speeds up the per-query new-result counts; very old schemas lack is_new.
+        result_cols = {r[1] for r in conn.execute("PRAGMA table_info(results)").fetchall()}
+        if "is_new" in result_cols:
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_results_query_new ON results(query_id, is_new)"
+            )
+            conn.commit()
+
 
 def split_note_media_flags(note: str | None) -> tuple[str | None, bool, bool]:
     """Pull "Audiobook" / "Ebook" comma-separated parts out of a note.
