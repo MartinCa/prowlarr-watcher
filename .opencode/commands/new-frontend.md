@@ -9,7 +9,7 @@ Run these in order, stopping to report if any step fails:
 1. `pnpm dlx shadcn@latest init --template vite --base base --preset <code>`,
    where `<code>` is the preset code passed as the command argument
    (`$ARGUMENTS`). If the argument is empty, ask for the preset code — it is
-   recorded in the frontend-kit README (this kit's is `b0`). Do not put an
+   recorded in the frontend-kit README (this kit's is `b18OWG`). Do not put an
    empty substitution inline after `--preset`; only run the command once you
    have the code.
 2. `pnpm dlx shadcn@latest add MartinCa/frontend-kit/conventions`
