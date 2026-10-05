@@ -34,7 +34,8 @@ Fix any reported violations or warnings rather than disabling rules or skipping 
 - `shadcn info` — what is installed, which base, where the docs are.
 - `shadcn docs <component>` — current API for a primitive. Use this instead of
   recalling props from memory; the Base UI and Radix APIs differ.
-- `shadcn add <name> --dry-run` / `--view` — inspect before writing files.
+- `shadcn add <name> --dry-run` / `--view` / `--diff` — inspect before writing files.
+- `shadcn preset resolve` — which preset the project is really on (style/baseColor); check alignment.
 
 ## Dependency versions
 
@@ -49,7 +50,9 @@ release), say so and name the reason in the commit.
 
 `pnpm lint` enforces the mechanical parts of `DESIGN.md` — strict TypeScript, no
 deep relative imports, no direct primitive imports outside `components/ui/`, no
-inline `style` props, no Zustand fetches, TanStack Query best practices; the rules
+inline `style` props, no Zustand fetches, no `onClick`/`onSelect`/`onValueChange` handler
+that only calls `navigate()` (render a link instead, `DESIGN.md` section 3), TanStack Query best
+practices; the rules
 themselves live in `DESIGN.md`. A few are warnings rather than errors, so CI runs
 with `--max-warnings 0`: a warning is a thing to fix, not a pass. Fix the code
 rather than disabling the rule; if a rule is genuinely wrong, change it upstream
