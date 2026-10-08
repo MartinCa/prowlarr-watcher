@@ -106,6 +106,7 @@ The app is available at `http://localhost:5000`. Data is persisted in `./data/`.
 - Untrusted URLs from indexers (`infoUrl`, `downloadUrl`) must be sanitized (`http:`, `https:`, `magnet:` only) to prevent stored XSS.
 - The scheduler runs in a daemon thread inside the gunicorn worker. Only 1 gunicorn worker is used to avoid multiple scheduler instances.
 - New results are detected by hashing the indexer name plus the `guid` (or `title|size` as fallback), so the same release on a second indexer (e.g. a freeleech-filtered duplicate tracker) notifies. Stored hashes were migrated to this scheme once (`migrated_indexer_scoped_hashes`). Results are seeded silently on first add.
+- Stored results that Prowlarr stops returning are deleted by `process_query_result`, unless their indexer is unhealthy per `/api/v1/indexerstatus` (disabled, backed off, or failed since the search started; see `prowlarr.unhealthy_indexer_names`). The status is fetched only when something went missing, and pruning is skipped if it can't be read. Accepted gaps: an indexer returning an empty 200 with no recorded failure, a reset Prowlarr status table, or clock drift beyond 30s all look healthy, so their results are pruned and re-notified when they reappear.
 
 ## Architecture
 

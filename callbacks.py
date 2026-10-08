@@ -49,13 +49,36 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
 
     raw = job.result or []
 
-    # Results from indexers that failed during the search must not be treated as removed.
-    # If the status can't be fetched we can't tell, so skip pruning this run.
-    try:
-        unhealthy = unhealthy_indexer_names(job.searched_at or datetime.now(timezone.utc))
-    except Exception:
-        log.warning("[Q%d] Could not read Prowlarr indexer status; not pruning", qid, exc_info=True)
-        unhealthy = None
+    # Reads need no lock; only the worker thread writes results.
+    with get_db() as conn:
+        stored = {
+            r["result_hash"]: r["indexer"]
+            for r in conn.execute(
+                "SELECT result_hash, indexer FROM results WHERE query_id=?", (qid,)
+            ).fetchall()
+        }
+    current = {hash_result(r) for r in raw}
+
+    # Stored results missing from the response are removed unless their indexer failed or
+    # is disabled, since its absence then says nothing. The status check costs a request
+    # (and must be fresh: a failure during this search can't be in an older snapshot), so
+    # it only runs when something actually went missing. If it fails we can't tell, so
+    # nothing is pruned this run.
+    #
+    # Known gaps (accepted): an indexer returning an empty 200 without Prowlarr recording
+    # a failure, a reset Prowlarr status table, or a host/Prowlarr clock drift beyond
+    # prowlarr._STATUS_CLOCK_SKEW all look healthy, so their results get pruned and are
+    # re-notified when they reappear.
+    gone: list[str] = []
+    missing = {h: ix for h, ix in stored.items() if h not in current}
+    if missing:
+        try:
+            unhealthy = unhealthy_indexer_names(job.searched_at or datetime.now(timezone.utc))
+            gone = [h for h, ix in missing.items() if ix not in unhealthy]
+        except Exception:
+            log.warning(
+                "[Q%d] Could not read Prowlarr indexer status; not pruning", qid, exc_info=True
+            )
 
     with _db_lock, get_db() as conn:
         row = conn.execute(
@@ -64,31 +87,12 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
         if not row:
             return
 
-        stored = {
-            r["result_hash"]: r["indexer"]
-            for r in conn.execute(
-                "SELECT result_hash, indexer FROM results WHERE query_id=?", (qid,)
-            ).fetchall()
-        }
-        seen = stored.keys()
-
-        current = set()
         new_items = []
         for r in raw:
-            h = hash_result(r)
-            current.add(h)
-            if h not in seen:
+            if hash_result(r) not in stored:
                 new_items.append(r)
                 _insert_result(conn, qid, r, 1, now_iso)
 
-        # Drop results Prowlarr no longer returns, except those of indexers that failed or
-        # are disabled (their absence says nothing). A result that merely left an indexer
-        # (e.g. a freeleech period ending) is gone from a healthy indexer and is removed.
-        gone = (
-            []
-            if unhealthy is None
-            else [h for h, ix in stored.items() if h not in current and ix not in unhealthy]
-        )
         if gone:
             conn.executemany(
                 "DELETE FROM results WHERE query_id=? AND result_hash=?",

@@ -1026,6 +1026,17 @@ class TestProcessQueryResult:
             n = conn.execute("SELECT COUNT(*) FROM results WHERE query_id=?", (qid,)).fetchone()[0]
         assert n == 0
 
+    def test_status_not_fetched_when_nothing_is_missing(self):
+        qid = _insert_query()
+        for r in SAMPLE_RESULTS:
+            _insert_result(qid, title=r["title"], guid=r["guid"], indexer=r["indexer"])
+
+        with patch("callbacks.unhealthy_indexer_names") as status:
+            job = worker.Job(status="done", result=SAMPLE_RESULTS)
+            callbacks.process_query_result(qid, "0 * * * *", job)
+
+        status.assert_not_called()
+
     def test_status_lookup_failure_skips_pruning(self):
         qid = _insert_query()
         _insert_result(qid, title="Keep", guid="guid-keep", indexer="IndexerA")

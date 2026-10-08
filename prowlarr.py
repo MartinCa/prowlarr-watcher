@@ -63,6 +63,8 @@ def effective_excluded_indexers(override: str | None) -> list[int]:
 
 
 # Allowance for clock differences between this host and Prowlarr when comparing timestamps.
+# Assumes both hosts are roughly NTP-synced; a larger drift can hide a failure that happened
+# during the search, so its indexer's missing results would be pruned.
 _STATUS_CLOCK_SKEW = timedelta(seconds=30)
 
 
@@ -73,7 +75,9 @@ def unhealthy_indexer_names(since: datetime) -> set[str]:
     indexer failure (timeout, rate limit, ...) in its indexer status. An indexer counts as
     unhealthy if it is disabled, backed off (``disabledTill`` in the future) or has a
     failure at or after `since`. Raises on any Prowlarr/request error so callers can fail
-    safe rather than treat missing results as removed.
+    safe rather than treat missing results as removed. The indexer list is cached (see
+    `list_indexers`), so an indexer disabled within the last few minutes may still look
+    enabled.
     """
     base = get_setting("prowlarr_url").rstrip("/")
     api_key = get_setting("prowlarr_api_key")
@@ -85,7 +89,7 @@ def unhealthy_indexer_names(since: datetime) -> set[str]:
         f"{base}/api/v1/indexerstatus", headers={"X-Api-Key": api_key}, timeout=timeout
     )
     resp.raise_for_status()
-    indexers = list_indexers(force=True)
+    indexers = list_indexers()
     names = {i["id"]: i["name"] for i in indexers}
     now = datetime.now(timezone.utc)
     cutoff = since - _STATUS_CLOCK_SKEW
