@@ -63,12 +63,24 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
             ).fetchall()
         }
 
+        current = set()
         new_items = []
         for r in raw:
             h = hash_result(r)
+            current.add(h)
             if h not in seen:
                 new_items.append(r)
                 _insert_result(conn, qid, r, 1, now_iso)
+
+        # Drop results Prowlarr no longer returns. An empty response is not pruned: it is
+        # indistinguishable from a transient indexer outage and would wipe every stored
+        # result (and re-notify them all once they return).
+        gone = seen - current if current else set()
+        if gone:
+            conn.executemany(
+                "DELETE FROM results WHERE query_id=? AND result_hash=?",
+                [(qid, h) for h in gone],
+            )
 
         if new_items:
             conn.execute(
@@ -83,7 +95,7 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
             )
         conn.commit()
 
-    log.info("[Q%d] %d total / %d new", qid, len(raw), len(new_items))
+    log.info("[Q%d] %d total / %d new / %d removed", qid, len(raw), len(new_items), len(gone))
 
     if new_items:
         notify_new_results(

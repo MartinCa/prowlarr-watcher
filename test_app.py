@@ -925,7 +925,8 @@ class TestProcessQueryResult:
             "size": 1024,
             "guid": "https://mam/t/1",
         }
-        job = worker.Job(status="done", result=[dup])
+        existing = {**dup, "indexer": "Non-free MyAnonamouse"}
+        job = worker.Job(status="done", result=[existing, dup])
 
         with patch("callbacks.notify_new_results") as notify:
             callbacks.process_query_result(qid, "0 * * * *", job)
@@ -935,6 +936,33 @@ class TestProcessQueryResult:
         with db.get_db() as conn:
             n = conn.execute("SELECT COUNT(*) FROM results WHERE query_id=?", (qid,)).fetchone()[0]
         assert n == 2
+
+    def test_results_no_longer_returned_are_removed(self):
+        qid = _insert_query()
+        for r in SAMPLE_RESULTS:
+            _insert_result(qid, title=r["title"], guid=r["guid"], indexer=r["indexer"])
+        _insert_result(qid, title="Gone", guid="guid-gone", indexer="TestIndexer")
+
+        job = worker.Job(status="done", result=SAMPLE_RESULTS)
+        callbacks.process_query_result(qid, "0 * * * *", job)
+
+        with db.get_db() as conn:
+            titles = {
+                r["title"]
+                for r in conn.execute("SELECT title FROM results WHERE query_id=?", (qid,))
+            }
+        assert "Gone" not in titles
+        assert len(titles) == 2
+
+    def test_empty_response_does_not_prune(self):
+        qid = _insert_query()
+        _insert_result(qid, title="Keep", guid="guid-keep", indexer="TestIndexer")
+
+        callbacks.process_query_result(qid, "0 * * * *", worker.Job(status="done", result=[]))
+
+        with db.get_db() as conn:
+            n = conn.execute("SELECT COUNT(*) FROM results WHERE query_id=?", (qid,)).fetchone()[0]
+        assert n == 1
 
     def test_updates_last_run_and_count(self):
         qid = _insert_query()
