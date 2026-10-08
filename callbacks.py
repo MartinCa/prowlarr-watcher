@@ -49,7 +49,8 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
 
     raw = job.result or []
 
-    # Reads need no lock; only the worker thread writes results.
+    # Reads need no lock: only the worker thread inserts results. API routes may delete rows
+    # concurrently, which is harmless since the DELETEs below are idempotent.
     with get_db() as conn:
         stored = {
             r["result_hash"]: r["indexer"]
