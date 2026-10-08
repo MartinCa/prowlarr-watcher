@@ -5,7 +5,7 @@ import sqlite3
 import tempfile
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -886,9 +886,54 @@ class TestWorkQueue:
 
 
 # ===========================================================================
+# Indexer health tests
+# ===========================================================================
+class TestUnhealthyIndexerNames:
+    SINCE = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+    def _run(self, statuses, indexers=None):
+        _configure_prowlarr()
+        indexers = indexers or [
+            {"id": 1, "name": "A", "enable": True},
+            {"id": 2, "name": "B", "enable": True},
+            {"id": 3, "name": "C", "enable": False},
+        ]
+        resp = type(
+            "R", (), {"raise_for_status": lambda self: None, "json": lambda self: statuses}
+        )()
+        with (
+            patch("prowlarr.requests.get", return_value=resp),
+            patch("prowlarr.list_indexers", return_value=indexers),
+        ):
+            return prowlarr.unhealthy_indexer_names(self.SINCE)
+
+    def test_recent_failure_is_unhealthy(self):
+        st = [{"indexerId": 1, "mostRecentFailure": "2026-01-01T12:00:05.1234567Z"}]
+        assert self._run(st) == {"A", "C"}
+
+    def test_old_failure_is_healthy(self):
+        st = [{"indexerId": 1, "mostRecentFailure": "2026-01-01T11:00:00Z"}]
+        assert self._run(st) == {"C"}
+
+    def test_active_backoff_is_unhealthy(self):
+        future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        st = [{"indexerId": 2, "mostRecentFailure": "2025-01-01T00:00:00Z", "disabledTill": future}]
+        assert self._run(st) == {"B", "C"}
+
+    def test_unparseable_timestamp_is_unhealthy(self):
+        st = [{"indexerId": 1, "mostRecentFailure": "garbage"}]
+        assert self._run(st) == {"A", "C"}
+
+
+# ===========================================================================
 # Result processing callback tests
 # ===========================================================================
 class TestProcessQueryResult:
+    @pytest.fixture(autouse=True)
+    def _all_indexers_healthy(self):
+        with patch("callbacks.unhealthy_indexer_names", return_value=set()):
+            yield
+
     def test_new_results_inserted(self):
         _configure_prowlarr()
         qid = _insert_query(name="Q1", query="ubuntu")
@@ -925,7 +970,8 @@ class TestProcessQueryResult:
             "size": 1024,
             "guid": "https://mam/t/1",
         }
-        job = worker.Job(status="done", result=[dup])
+        existing = {**dup, "indexer": "Non-free MyAnonamouse"}
+        job = worker.Job(status="done", result=[existing, dup])
 
         with patch("callbacks.notify_new_results") as notify:
             callbacks.process_query_result(qid, "0 * * * *", job)
@@ -935,6 +981,72 @@ class TestProcessQueryResult:
         with db.get_db() as conn:
             n = conn.execute("SELECT COUNT(*) FROM results WHERE query_id=?", (qid,)).fetchone()[0]
         assert n == 2
+
+    def test_results_no_longer_returned_are_removed(self):
+        qid = _insert_query()
+        for r in SAMPLE_RESULTS:
+            _insert_result(qid, title=r["title"], guid=r["guid"], indexer=r["indexer"])
+        _insert_result(qid, title="Gone", guid="guid-gone", indexer="TestIndexer")
+
+        job = worker.Job(status="done", result=SAMPLE_RESULTS)
+        callbacks.process_query_result(qid, "0 * * * *", job)
+
+        with db.get_db() as conn:
+            titles = {
+                r["title"]
+                for r in conn.execute("SELECT title FROM results WHERE query_id=?", (qid,))
+            }
+        assert "Gone" not in titles
+        assert len(titles) == 2
+
+    def test_failed_indexer_results_are_not_pruned(self):
+        qid = _insert_query()
+        _insert_result(qid, title="A-gone", guid="guid-a-gone", indexer="IndexerA")
+        _insert_result(qid, title="B1", guid="guid-b1", indexer="IndexerB")
+
+        # IndexerB failed during the search, IndexerA is healthy and now returns nothing
+        resp = [{"title": "C", "indexer": "IndexerC", "size": 1, "guid": "guid-c"}]
+        with patch("callbacks.unhealthy_indexer_names", return_value={"IndexerB"}):
+            callbacks.process_query_result(qid, "0 * * * *", worker.Job(status="done", result=resp))
+
+        with db.get_db() as conn:
+            titles = {
+                r["title"]
+                for r in conn.execute("SELECT title FROM results WHERE query_id=?", (qid,))
+            }
+        assert titles == {"B1", "C"}
+
+    def test_healthy_indexer_with_zero_results_is_pruned(self):
+        qid = _insert_query()
+        _insert_result(qid, title="Left freeleech", guid="guid-fl", indexer="IndexerA")
+
+        callbacks.process_query_result(qid, "0 * * * *", worker.Job(status="done", result=[]))
+
+        with db.get_db() as conn:
+            n = conn.execute("SELECT COUNT(*) FROM results WHERE query_id=?", (qid,)).fetchone()[0]
+        assert n == 0
+
+    def test_status_not_fetched_when_nothing_is_missing(self):
+        qid = _insert_query()
+        for r in SAMPLE_RESULTS:
+            _insert_result(qid, title=r["title"], guid=r["guid"], indexer=r["indexer"])
+
+        with patch("callbacks.unhealthy_indexer_names") as status:
+            job = worker.Job(status="done", result=SAMPLE_RESULTS)
+            callbacks.process_query_result(qid, "0 * * * *", job)
+
+        status.assert_not_called()
+
+    def test_status_lookup_failure_skips_pruning(self):
+        qid = _insert_query()
+        _insert_result(qid, title="Keep", guid="guid-keep", indexer="IndexerA")
+
+        with patch("callbacks.unhealthy_indexer_names", side_effect=RuntimeError("down")):
+            callbacks.process_query_result(qid, "0 * * * *", worker.Job(status="done", result=[]))
+
+        with db.get_db() as conn:
+            n = conn.execute("SELECT COUNT(*) FROM results WHERE query_id=?", (qid,)).fetchone()[0]
+        assert n == 1
 
     def test_updates_last_run_and_count(self):
         qid = _insert_query()

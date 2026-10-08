@@ -7,6 +7,7 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import IntEnum
 from typing import Any
 
@@ -36,6 +37,8 @@ class Job:
     result: Any = None
     error: str | None = None
     attempt: int = 1
+    # Wall-clock start of the search attempt (UTC); used to spot indexer failures during it.
+    searched_at: datetime | None = None
     created_at: float = field(default_factory=time.monotonic)
     _seq: int = 0
 
@@ -133,6 +136,7 @@ class WorkQueue:
                 log.debug("Rate-limiting Prowlarr request, sleeping %.1fs", wait)
                 time.sleep(wait)
 
+            job.searched_at = datetime.now(timezone.utc)
             try:
                 if job.runner:
                     job.result = job.runner()

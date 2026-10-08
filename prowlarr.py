@@ -3,6 +3,7 @@
 import hashlib
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -59,6 +60,60 @@ def effective_excluded_indexers(override: str | None) -> list[int]:
     """Resolve a query's excluded-indexer override (None = inherit the default list)."""
     raw = override if override is not None else get_setting("default_excluded_indexers", "")
     return parse_indexer_ids(raw)
+
+
+# Allowance for clock differences between this host and Prowlarr when comparing timestamps.
+# Assumes both hosts are roughly NTP-synced; a larger drift can hide a failure that happened
+# during the search, so its indexer's missing results would be pruned.
+_STATUS_CLOCK_SKEW = timedelta(seconds=30)
+
+
+def unhealthy_indexer_names(since: datetime) -> set[str]:
+    """Names of indexers whose results can't be trusted for a search that started at `since`.
+
+    Prowlarr's search response doesn't say which indexers failed, but it records every
+    indexer failure (timeout, rate limit, ...) in its indexer status. An indexer counts as
+    unhealthy if it is disabled, backed off (``disabledTill`` in the future) or has a
+    failure at or after `since`. Raises on any Prowlarr/request error so callers can fail
+    safe rather than treat missing results as removed. The indexer list is cached (see
+    `list_indexers`), so an indexer disabled within the last few minutes may still look
+    enabled.
+    """
+    base = get_setting("prowlarr_url").rstrip("/")
+    api_key = get_setting("prowlarr_api_key")
+    if not base or not api_key:
+        raise ValueError("Prowlarr URL and API key must be configured in Settings")
+
+    timeout = int(get_setting("prowlarr_timeout", "200"))
+    resp = requests.get(
+        f"{base}/api/v1/indexerstatus", headers={"X-Api-Key": api_key}, timeout=timeout
+    )
+    resp.raise_for_status()
+    indexers = list_indexers()
+    names = {i["id"]: i["name"] for i in indexers}
+    now = datetime.now(timezone.utc)
+    cutoff = since - _STATUS_CLOCK_SKEW
+
+    def _parse(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        dt = datetime.fromisoformat(value)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+    unhealthy = {i["name"] for i in indexers if not i["enable"]}
+    for st in resp.json():
+        name = names.get(st.get("indexerId"))
+        if name is None:
+            continue
+        try:
+            disabled_till = _parse(st.get("disabledTill"))
+            last_failure = _parse(st.get("mostRecentFailure"))
+        except ValueError:
+            unhealthy.add(name)  # unparseable timestamp: assume the worst
+            continue
+        if (disabled_till and disabled_till > now) or (last_failure and last_failure >= cutoff):
+            unhealthy.add(name)
+    return unhealthy
 
 
 def prowlarr_search_raw(
