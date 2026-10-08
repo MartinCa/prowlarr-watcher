@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from db import _db_lock, get_db
 from notifications import notify_error, notify_new_results
-from prowlarr import hash_result, sanitize_url
+from prowlarr import hash_result, sanitize_url, unhealthy_indexer_names
 from worker import Job
 
 log = logging.getLogger("prowlarr-watcher")
@@ -49,6 +49,14 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
 
     raw = job.result or []
 
+    # Results from indexers that failed during the search must not be treated as removed.
+    # If the status can't be fetched we can't tell, so skip pruning this run.
+    try:
+        unhealthy = unhealthy_indexer_names(job.searched_at or datetime.now(timezone.utc))
+    except Exception:
+        log.warning("[Q%d] Could not read Prowlarr indexer status; not pruning", qid, exc_info=True)
+        unhealthy = None
+
     with _db_lock, get_db() as conn:
         row = conn.execute(
             "SELECT name, query, note, audiobook, ebook FROM queries WHERE id=?", (qid,)
@@ -73,12 +81,14 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
                 new_items.append(r)
                 _insert_result(conn, qid, r, 1, now_iso)
 
-        # Drop results Prowlarr no longer returns, but only for indexers that returned at
-        # least one result this run. Prowlarr still answers when an indexer times out or is
-        # rate-limited, so an indexer absent from the response may just be down; pruning its
-        # results would re-notify them all once it recovers.
-        responded = {r.get("indexer") for r in raw}
-        gone = [h for h, indexer in stored.items() if h not in current and indexer in responded]
+        # Drop results Prowlarr no longer returns, except those of indexers that failed or
+        # are disabled (their absence says nothing). A result that merely left an indexer
+        # (e.g. a freeleech period ending) is gone from a healthy indexer and is removed.
+        gone = (
+            []
+            if unhealthy is None
+            else [h for h, ix in stored.items() if h not in current and ix not in unhealthy]
+        )
         if gone:
             conn.executemany(
                 "DELETE FROM results WHERE query_id=? AND result_hash=?",
