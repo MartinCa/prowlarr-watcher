@@ -56,12 +56,13 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
         if not row:
             return
 
-        seen = {
-            r["result_hash"]
+        stored = {
+            r["result_hash"]: r["indexer"]
             for r in conn.execute(
-                "SELECT result_hash FROM results WHERE query_id=?", (qid,)
+                "SELECT result_hash, indexer FROM results WHERE query_id=?", (qid,)
             ).fetchall()
         }
+        seen = stored.keys()
 
         current = set()
         new_items = []
@@ -72,10 +73,12 @@ def process_query_result(qid: int, cron_expr: str, job: Job):
                 new_items.append(r)
                 _insert_result(conn, qid, r, 1, now_iso)
 
-        # Drop results Prowlarr no longer returns. An empty response is not pruned: it is
-        # indistinguishable from a transient indexer outage and would wipe every stored
-        # result (and re-notify them all once they return).
-        gone = seen - current if current else set()
+        # Drop results Prowlarr no longer returns, but only for indexers that returned at
+        # least one result this run. Prowlarr still answers when an indexer times out or is
+        # rate-limited, so an indexer absent from the response may just be down; pruning its
+        # results would re-notify them all once it recovers.
+        responded = {r.get("indexer") for r in raw}
+        gone = [h for h, indexer in stored.items() if h not in current and indexer in responded]
         if gone:
             conn.executemany(
                 "DELETE FROM results WHERE query_id=? AND result_hash=?",

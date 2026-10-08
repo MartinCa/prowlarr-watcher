@@ -954,6 +954,23 @@ class TestProcessQueryResult:
         assert "Gone" not in titles
         assert len(titles) == 2
 
+    def test_indexer_missing_from_response_is_not_pruned(self):
+        qid = _insert_query()
+        _insert_result(qid, title="A1", guid="guid-a1", indexer="IndexerA")
+        _insert_result(qid, title="A-gone", guid="guid-a-gone", indexer="IndexerA")
+        _insert_result(qid, title="B1", guid="guid-b1", indexer="IndexerB")
+        resp = [{"title": "A1", "indexer": "IndexerA", "size": 1, "guid": "guid-a1"}]
+
+        callbacks.process_query_result(qid, "0 * * * *", worker.Job(status="done", result=resp))
+
+        with db.get_db() as conn:
+            titles = {
+                r["title"]
+                for r in conn.execute("SELECT title FROM results WHERE query_id=?", (qid,))
+            }
+        # IndexerA responded so its stale row is pruned; IndexerB did not, so it is kept
+        assert titles == {"A1", "B1"}
+
     def test_empty_response_does_not_prune(self):
         qid = _insert_query()
         _insert_result(qid, title="Keep", guid="guid-keep", indexer="TestIndexer")
