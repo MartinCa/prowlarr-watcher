@@ -1,3 +1,5 @@
+<p align="center"><img src="frontend/public/favicon.svg" alt="Prowlarr Watcher" width="96" height="96"></p>
+
 # Prowlarr Watcher
 
 A small web app that watches [Prowlarr](https://github.com/Prowlarr/Prowlarr) for new search results and sends notifications when they appear.

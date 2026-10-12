@@ -8,8 +8,11 @@ function RootLayout() {
   return (
     <div className="min-h-screen">
       <nav className="bg-card flex h-12 items-center gap-8 border-b px-6">
-        <span className="font-mono text-sm font-medium tracking-wide">
-          PROWLARR<span className="text-muted-foreground">/</span>WATCHER
+        <span className="flex items-center gap-2 font-mono text-sm font-medium tracking-wide">
+          <img src="/favicon.svg" alt="" className="size-6" />
+          <span>
+            PROWLARR<span className="text-muted-foreground">/</span>WATCHER
+          </span>
         </span>
         <Link
           to="/"
