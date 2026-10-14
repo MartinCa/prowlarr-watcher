@@ -8,7 +8,7 @@ Flask web app that polls Prowlarr for new search results on a cron schedule and 
 
 ## Stack
 
-- **Backend**: Python 3.14, Flask, SQLite (WAL mode), gunicorn (1 worker, 4 threads)
+- **Backend**: Python 3.15, Flask, SQLite (WAL mode), gunicorn (1 worker, 4 threads)
 - **Scheduler**: background thread using `croniter`, wakes every 30s
 - **Work Queue**: single worker thread draining a `PriorityQueue` for rate-limited Prowlarr requests
 - **Notifications**: Apprise
@@ -34,9 +34,9 @@ Flask web app that polls Prowlarr for new search results on a cron schedule and 
 
 ### Python version — match the project, not the sandbox
 
-The backend runs on **Python 3.14** (Dockerfile `python:3.14-slim`, CI `python-version: "3.14"`, `pyproject.toml` `target-version = "py314"`). **Running tests or parsing code with the wrong version produces false results** — e.g. 3.13 rejects the bare multi-except `except ValueError, TypeError:` that is legal in 3.14 (PEP 758), which can be misread as a syntax error in the codebase. Before running `pytest`, `python -m ast`, `compile()`, or any syntax/correctness check:
+The backend runs on **Python 3.15** (Dockerfile `python:3.15-slim`, CI `python-version: "3.15"`, `pyproject.toml` `target-version = "py315"`). **Running tests or parsing code with the wrong version produces false results** — e.g. 3.13 rejects the bare multi-except `except ValueError, TypeError:` that is legal in 3.14+ (PEP 758), which can be misread as a syntax error in the codebase. Before running `pytest`, `python -m ast`, `compile()`, or any syntax/correctness check:
 
-1. Use Python 3.14. If the sandbox doesn't provide it, get one: `uv python install 3.14` then `uv run --python 3.14 ...` (or `uvx --python 3.14`).
+1. Use Python 3.15. If the sandbox doesn't provide it, get one: `uv python install 3.15` then `uv run --python 3.15 ...` (or `uvx --python 3.15`).
 2. Don't conclude code is broken from a parse/test failure until you've re-run it under the project's Python version.
 
 ### Backend
@@ -60,7 +60,7 @@ Local hooks are installed automatically by `pnpm install` (the `prepare` script 
 
 **AI agents**: do not install the lefthook binary yourself — it is included in the OpenCode image. If `lefthook` is not on PATH, report this to the user and ask whether to install it.
 
-Hooks come from the shared `MartinCa/lefthook-configs` fragments pinned at `v2.1.0` in `lefthook.yml` (a thin `remotes:` config): `lefthook-shared.yml` (secret scan + workflow audit), `langs/ts.yml` (`lint-ts`/`format-ts`), `langs/python.yml` (`lint-python`/`format-python`), `pre-push-ts.yml` (`test-ts`), and `commit-msg.yml`. `remotes:` configs merge *over* `lefthook.yml`, so this repo's adaptations live in `lefthook-local.yml` (the one layer that overrides remotes): it adds `root: "frontend/"` to the shared `lint-ts`/`format-ts`/`test-ts` commands so they run inside `frontend/` (inheriting the fragment's globs and `stage_fixed` handling). The Python hooks are consumed directly from `langs/python.yml` and run from the repo root — possible since v2.0.0 suffixed every fragment's command names, removing the same-named-command collision (lefthook merges same-named commands key-by-key with the last one winning) that previously made `langs/ts.yml` + `langs/python.yml` incompatible to consume together and forced a local re-declaration here (see [lefthook-configs#5](https://github.com/MartinCa/lefthook-configs/issues/5)). The `lint-python`/`format-python` commands respect `pyproject.toml`'s `[tool.ruff]` (including `target-version = "py314"`, so the PEP 758 bare multi-`except` forms parse correctly under any sandbox Python).
+Hooks come from the shared `MartinCa/lefthook-configs` fragments pinned at `v2.1.0` in `lefthook.yml` (a thin `remotes:` config): `lefthook-shared.yml` (secret scan + workflow audit), `langs/ts.yml` (`lint-ts`/`format-ts`), `langs/python.yml` (`lint-python`/`format-python`), `pre-push-ts.yml` (`test-ts`), and `commit-msg.yml`. `remotes:` configs merge *over* `lefthook.yml`, so this repo's adaptations live in `lefthook-local.yml` (the one layer that overrides remotes): it adds `root: "frontend/"` to the shared `lint-ts`/`format-ts`/`test-ts` commands so they run inside `frontend/` (inheriting the fragment's globs and `stage_fixed` handling). The Python hooks are consumed directly from `langs/python.yml` and run from the repo root — possible since v2.0.0 suffixed every fragment's command names, removing the same-named-command collision (lefthook merges same-named commands key-by-key with the last one winning) that previously made `langs/ts.yml` + `langs/python.yml` incompatible to consume together and forced a local re-declaration here (see [lefthook-configs#5](https://github.com/MartinCa/lefthook-configs/issues/5)). The `lint-python`/`format-python` commands respect `pyproject.toml`'s `[tool.ruff]` (including `target-version = "py315"`, so the PEP 758 bare multi-`except` forms parse correctly under any sandbox Python).
 
 - **pre-commit** — `lint-ts`/`format-ts` via ESLint `--fix` + Prettier `--write` on staged TS/TSX and Prettier on JSON/CSS/MD/JS/MJS/HTML, run from `frontend/` and re-staging fixed files; `lint-python`/`format-python` via `uvx ruff check --fix` + `uvx ruff format` on staged `*.py`/`*.pyi` from the repo root, re-staging fixed files. `lefthook-shared.yml` secret-scans the staged diff with `betterleaks` (blocks the commit on a leak) and audits staged `.github/workflows/*` files with `zizmor` (blocks on a finding).
 - **pre-push** — `test-ts` runs `pnpm test` (Vitest, `vitest run`) on every push from `frontend/`; a failing suite blocks the push. `test-python` is deliberately not adopted: this repo is pip/requirements-based (`requirements.txt`/`requirements-dev.txt`, no `[project]` metadata, no `uv.lock`), so the shared `pre-push-python.yml` fragment's `uv run pytest` cannot resolve pytest on a fresh checkout (`Failed to spawn: pytest`) and would fail every push. Adopt it once the repo is converted to a uv-managed project.
@@ -127,9 +127,9 @@ The app is available at `http://localhost:5000`. Data is persisted in `./data/`.
 
 ## Ruff config
 
-`pyproject.toml`: line-length 100, target Python 3.14, lint rules E/F/W/I.
+`pyproject.toml`: line-length 100, target Python 3.15, lint rules E/F/W/I.
 
-**Note:** ruff with `target-version = "py314"` formats `except (ExcA, ExcB):` to the bare `except ExcA, ExcB:` form. Under Python 3.14 that is **valid** (PEP 758 allows unparenthesized multi-except), so leave it as-is — do not "fix" it to `except Exception:`, which widens the catch. It only fails to parse on Python ≤3.13, which is why you must run tools under 3.14 (see "Python version" above).
+**Note:** ruff with `target-version = "py315"` formats `except (ExcA, ExcB):` to the bare `except ExcA, ExcB:` form. Under Python 3.15 that is **valid** (PEP 758 allows unparenthesized multi-except), so leave it as-is — do not "fix" it to `except Exception:`, which widens the catch. It only fails to parse on Python ≤3.13, which is why you must run tools under 3.15 (see "Python version" above).
 
 ## Before finishing any change
 
