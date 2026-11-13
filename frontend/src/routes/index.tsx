@@ -7,7 +7,12 @@ import { Input } from "@/components/ui/input";
 import { AddQueryDialog } from "@/features/queries/components/AddQueryDialog";
 import { ClearIndexerResults } from "@/features/queries/components/ClearIndexerResults";
 import { QueryFilters } from "@/features/queries/components/QueryFilters";
-import { hasActiveFilter, NO_FILTERS, type QueryFilterState } from "@/features/queries/filters";
+import {
+  hasActiveFilter,
+  matchesMediaFilter,
+  NO_FILTERS,
+  type QueryFilterState,
+} from "@/features/queries/filters";
 import { QueryCard } from "@/features/queries/components/QueryCard";
 import { useMarkAllSeen, useQueries, useQueueStatus } from "@/features/queries/hooks";
 import { useSettings } from "@/features/settings/hooks";
@@ -18,8 +23,8 @@ export const Route = createFileRoute("/")({ component: QueryListPage });
 
 function matchesFilters(q: Query, filters: QueryFilterState): boolean {
   if (filters.newOnly && q.newCount === 0) return false;
-  if (filters.audiobook && !q.audiobook) return false;
-  if (filters.ebook && !q.ebook) return false;
+  if (!matchesMediaFilter(filters.audiobook, q.audiobook)) return false;
+  if (!matchesMediaFilter(filters.ebook, q.ebook)) return false;
   return true;
 }
 
