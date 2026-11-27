@@ -39,7 +39,7 @@
     "@vitejs/plugin-react": "6.3.0",
     "eslint": "10.15.0",
     "openapi-typescript": "7.13.0",
-    "oxlint": "1.94.0",
+    "oxlint": "1.95.0",
     "prettier": "3.10.1",
     "prettier-plugin-tailwindcss": "0.8.1",
     "typescript": "6.0.3",
